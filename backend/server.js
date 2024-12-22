@@ -12,6 +12,7 @@ app.use(cors());
 const corsOptions = {
   origin: 'https://gvponeclub.vercel.app/', // replace with your actual Vercel frontend URL
   methods: ['GET', 'POST', 'PUT', 'DELETE'],
+  allowedHeaders: 'Content-Type,Authorization',
 };
 // Connect to the database
 connectDB();
