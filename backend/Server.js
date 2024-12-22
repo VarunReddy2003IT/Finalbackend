@@ -2,7 +2,6 @@ const express = require('express');
 const cors = require('cors');
 const connectDB = require('./utils/dbconnection'); // MongoDB connection function
 
-
 const app = express();
 const PORT = 5000;
 

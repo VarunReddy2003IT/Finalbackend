@@ -13,7 +13,7 @@ const transporter = nodemailer.createTransport({
   service: 'gmail',
   auth: {
     user: 'varunreddy2new@gmail.com',  // Your Gmail address
-    pass: 'bmly geoo gwkg jasu',         // The App Password you generated for Google Account
+    pass: 'bmly geoo gwkg jasu',       // The App Password you generated for Google Account
   },
 });
 
@@ -35,7 +35,7 @@ router.post('/', async (req, res) => {
     return res.status(400).json({ message: 'A signup request with this email already exists. Please wait for approval.' });
   }
 
-  // Handle case for admin or lead signup requests
+  // Handle case for admin, lead, or member signup requests
   if (role === 'admin' || role === 'lead') {
     // Save signup request for admin or lead
     const newRequest = new SignupRequest({
@@ -57,13 +57,13 @@ router.post('/', async (req, res) => {
       // Prepare email options to send to admins for approval
       const mailOptions = {
         from: 'varunreddy2new@gmail.com',  // Sender's email
-        to: adminEmails,               // List of admins to notify
-        subject: `New ${role} Signup Request`,  // Subject line
+        to: adminEmails,                   // List of admins to notify
+        subject: `GVPCE Club Connect Signup Request for ${role}`,  // Subject line
         html: `        
-          <p>${name} (${email}) has requested to sign up as a ${role}.</p>
+          <p>Name:${name} <br> Email: ${email} has requested to sign up as a ${role}.</p>
           <p>Click below to respond:</p>
-<a href="http://192.168.x.x:5000/api/signup/approve/${newRequest._id}">Approve</a>
-          <a href="http://localhost:5000/api/signup/reject/${newRequest._id}">Reject</a>
+          <a style={color:yellow,background-color:yellow} href="http://localhost:5000/api/signup/approve/${newRequest._id}">Approve</a>
+          <a style={color:yellow,background-color:yellow} href="http://localhost:5000/api/signup/reject/${newRequest._id}">Reject</a>
         `,  // Email body with links to approve or reject the signup
       };
 
@@ -71,16 +71,14 @@ router.post('/', async (req, res) => {
       await transporter.sendMail(mailOptions);
 
       // Respond to the client indicating that the request was submitted successfully
-      res.status(200).json({ message: `Signup request submitted for ${role}. Awaiting admin approval.` });
+      res.status(200).json({ message: `Signup request submitted for ${role}. Please wait for admin approval.` });
     } catch (err) {
-      console.error('Error handling signup request:', err);
-      res.status(500).json({ message: 'Error processing signup request', error: err });
+      console.error('Error during signup request:', err);
+      res.status(500).json({ message: 'Error processing signup request' });
     }
-
-  // Handle case for member signup
   } else if (role === 'member') {
-    // Create member account directly (no admin approval)
-    const newUser = new Member({
+    // Directly add member to the Member collection if role is 'member'
+    const newMember = new Member({
       name,
       collegeId,
       email,
@@ -88,75 +86,101 @@ router.post('/', async (req, res) => {
     });
 
     try {
-      // Save member to the database
-      await newUser.save();
-      res.status(201).json({ message: 'Member created successfully' });
+      // Save the new member directly in the Member collection
+      await newMember.save();
+
+      // Send a welcome email to the new member
+      const mailOptions = {
+        from: 'varunreddy2new@gmail.com',
+        to: email,
+        subject: 'Welcome to the system!',
+        html: `<p>Dear ${name},</p><p>Welcome to our platform. Your account has been successfully created.</p>`,
+      };
+
+      // Send the email to the new member
+      await transporter.sendMail(mailOptions);
+
+      res.status(200).json({ message: 'Member account created successfully' });
     } catch (err) {
-      console.error('Error storing member data:', err);
-      res.status(500).json({ message: 'Error storing member data', error: err });
+      console.error('Error adding member:', err);
+      res.status(500).json({ message: 'Error processing member signup' });
     }
-
   } else {
-    // If the role is invalid, respond with an error message
-    res.status(400).json({ message: 'Invalid role' });
+    return res.status(400).json({ message: 'Invalid role' });
   }
 });
 
-// Route to approve signup request (admin only)
+// Route to approve a signup request
 router.get('/approve/:id', async (req, res) => {
-  const requestId = req.params.id;
-  
   try {
-    // Find the signup request by ID
-    const request = await SignupRequest.findById(requestId);
-    
-    if (!request) {
+    const signupRequest = await SignupRequest.findById(req.params.id);
+
+    if (!signupRequest) {
       return res.status(404).json({ message: 'Signup request not found' });
     }
 
-    // If the role is admin or lead, create the respective user
-    if (request.role === 'admin' || request.role === 'lead') {
-      const UserModel = request.role === 'admin' ? Admin : Lead;
+    let user = null;
 
-      const newUser = new UserModel({
-        name: request.name,
-        collegeId: request.collegeId,
-        email: request.email,
-        password: request.password, // Consider hashing again if required
+    // Create user based on role
+    if (signupRequest.role === 'admin') {
+      user = new Admin({
+        name: signupRequest.name,
+        collegeId: signupRequest.collegeId,
+        email: signupRequest.email,
+        password: signupRequest.password,
       });
-
-      await newUser.save();
-
-      // Delete the signup request after approval
-      await SignupRequest.findByIdAndDelete(requestId);
-
-      res.status(200).json({ message: `${request.role} approved successfully` });
-    } else {
-      res.status(400).json({ message: 'Invalid role for approval' });
+    } else if (signupRequest.role === 'lead') {
+      user = new Lead({
+        name: signupRequest.name,
+        collegeId: signupRequest.collegeId,
+        email: signupRequest.email,
+        password: signupRequest.password,
+      });
+    } else if (signupRequest.role === 'member') {
+      user = new Member({
+        name: signupRequest.name,
+        collegeId: signupRequest.collegeId,
+        email: signupRequest.email,
+        password: signupRequest.password,
+      });
     }
 
+    // Save the user to the respective model and delete the request
+    await user.save();
+    await SignupRequest.findByIdAndDelete(req.params.id);
+
+    res.status(200).json({ message: `Signup request for ${signupRequest.role} approved and user added` });
   } catch (err) {
-    console.error('Error approving signup request:', err);
-    res.status(500).json({ message: 'Error processing approval', error: err });
+    res.status(500).json({ message: 'Error approving signup request', error: err });
   }
 });
 
-// Route to reject signup request (admin only)
+// Route to reject a signup request
 router.get('/reject/:id', async (req, res) => {
-  const requestId = req.params.id;
-  
   try {
-    // Find the signup request by ID and delete it
-    const request = await SignupRequest.findByIdAndDelete(requestId);
+    const signupRequest = await SignupRequest.findById(req.params.id);
 
-    if (!request) {
+    if (!signupRequest) {
       return res.status(404).json({ message: 'Signup request not found' });
     }
 
-    res.status(200).json({ message: 'Signup request rejected successfully' });
+    // Delete the request if it's rejected
+    await SignupRequest.findByIdAndDelete(req.params.id);
+
+    res.status(200).json({ message: `Signup request for ${signupRequest.role} rejected` });
   } catch (err) {
-    console.error('Error rejecting signup request:', err);
-    res.status(500).json({ message: 'Error processing rejection', error: err });
+    res.status(500).json({ message: 'Error rejecting signup request' });
+  }
+});
+
+// Route to fetch all pending signup requests (for admins to approve/reject)
+router.get('/pending', async (req, res) => {
+  try {
+    const pendingRequests = await SignupRequest.find();  // You can filter by role if necessary
+    res.status(200).json(pendingRequests);
+  } catch (err) {
+    console.error('Error fetching pending requests:', err);
+    res.status(500).json({ message: 'Error fetching pending requests', error: err });
   }
 });
 
