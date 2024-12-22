@@ -14,7 +14,7 @@ router.post('/', async (req, res) => {
   }
 
   let userModel;
-  if (role === 'admin') userModel = 'Admin';
+  if (role === 'admin') userModel = Admin;
   else if (role === 'lead') userModel = Lead;
   else if (role === 'member') userModel = Member;
   else return res.status(400).json({ message: 'Invalid role' });
