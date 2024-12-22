@@ -12,7 +12,7 @@ app.use(cors());
 const corsOptions = {
   origin: '*', // replace with your actual Vercel frontend URL
   methods: ['GET', 'POST', 'PUT', 'DELETE'],
-  allowedHeaders: [Content-Type,Authorization],
+  allowedHeaders: 'Content-Type,Authorization',
 };
 // Connect to the database
 connectDB();
