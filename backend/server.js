@@ -9,6 +9,10 @@ const PORT = 5000;
 app.use(express.json());
 app.use(cors());
 
+const corsOptions = {
+  origin: 'https://gvpcecc.vercel.app/', // replace with your actual Vercel frontend URL
+  methods: ['GET', 'POST', 'PUT', 'DELETE'],
+};
 // Connect to the database
 connectDB();
 
