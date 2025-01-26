@@ -60,10 +60,10 @@ router.post('/', async (req, res) => {
         to: adminEmails,                   // List of admins to notify
         subject: `GVPCE Club Connect Signup Request for ${role}`,  // Subject line
         html: `        
-          <p>Name:${name} <br> Email: ${email} has requested to sign up as a ${role}.</p>
+          <p>Name: ${name} <br> Email: ${email} has requested to sign up as a ${role}.</p>
           <p>Click below to respond:</p>
-          <a style={color:yellow,background-color:yellow} href="http://localhost:5000/api/signup/approve/${newRequest._id}">Approve</a>
-          <a style={color:yellow,background-color:yellow} href="http://localhost:5000/api/signup/reject/${newRequest._id}">Reject</a>
+          <a style="color:yellow;background-color:yellow" href="https://finalbackend-8.onrender.com/api/signup/approve/${newRequest._id}">Approve</a>
+          <a style="color:yellow;background-color:yellow" href="https://finalbackend-8.onrender.com/api/signup/reject/${newRequest._id}">Reject</a>
         `,  // Email body with links to approve or reject the signup
       };
 
@@ -121,32 +121,28 @@ router.get('/approve/:id', async (req, res) => {
 
     let user = null;
 
-    // Create user based on role
+    // Check for existing user and update based on role
     if (signupRequest.role === 'admin') {
-      user = new Admin({
-        name: signupRequest.name,
-        collegeId: signupRequest.collegeId,
-        email: signupRequest.email,
-        password: signupRequest.password,
-      });
+      user = await Admin.findOneAndUpdate(
+        { email: signupRequest.email },  // Check for existing admin by email
+        { $set: { name: signupRequest.name, collegeId: signupRequest.collegeId, password: signupRequest.password }},
+        { new: true, upsert: true }  // If no existing admin, it will create one
+      );
     } else if (signupRequest.role === 'lead') {
-      user = new Lead({
-        name: signupRequest.name,
-        collegeId: signupRequest.collegeId,
-        email: signupRequest.email,
-        password: signupRequest.password,
-      });
+      user = await Lead.findOneAndUpdate(
+        { email: signupRequest.email },
+        { $set: { name: signupRequest.name, collegeId: signupRequest.collegeId, password: signupRequest.password }},
+        { new: true, upsert: true }
+      );
     } else if (signupRequest.role === 'member') {
-      user = new Member({
-        name: signupRequest.name,
-        collegeId: signupRequest.collegeId,
-        email: signupRequest.email,
-        password: signupRequest.password,
-      });
+      user = await Member.findOneAndUpdate(
+        { email: signupRequest.email },
+        { $set: { name: signupRequest.name, collegeId: signupRequest.collegeId, password: signupRequest.password }},
+        { new: true, upsert: true }
+      );
     }
 
-    // Save the user to the respective model and delete the request
-    await user.save();
+    // Delete the signup request after approval
     await SignupRequest.findByIdAndDelete(req.params.id);
 
     res.status(200).json({ message: `Signup request for ${signupRequest.role} approved and user added` });
