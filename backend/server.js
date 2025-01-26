@@ -21,6 +21,7 @@ connectDB();
 app.use('/api/signup', require('./routes/backendsignup'));
 //hello
 app.use('/api/login', require('./routes/backendlogin')); 
+app.use('/api/event',require('./models/events'))
 
 // Start the server
 app.listen(PORT, () => {
