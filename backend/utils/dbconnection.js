@@ -1,7 +1,7 @@
 const mongoose = require('mongoose');
 
 // MongoDB connection URI (ensure sensitive data like passwords are stored securely, e.g., using environment variables)
-const mongoURI = 'mongodb+srv://varunreddy2new:Varun%404545@cms.v9l9d.mongodb.net/?retryWrites=true&w=majority&appName=CMS';
+const mongoURI = 'mongodb+srv://varunreddy2new:Varun%404545@cms.v9l9d.mongodb.net/CollegeMembers?retryWrites=true&w=majority';
 
 /**
  * Function to establish a connection to MongoDB.
