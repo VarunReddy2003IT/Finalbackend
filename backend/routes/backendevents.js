@@ -1,8 +1,7 @@
 const express = require('express');
 const router = express.Router();
-const Event = require('../models/events'); // Import your events model
+const Event = require('../models/events');
 
-// Get all events
 router.get('/', async (req, res) => {
   try {
     const events = await Event.find(); // Fetch all events
