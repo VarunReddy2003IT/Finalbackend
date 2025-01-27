@@ -9,6 +9,6 @@ const clubEventSchema = new mongoose.Schema({
 });
 
 // Create the ClubEvent model
-const ClubEvent = mongoose.model('ClubEvent', clubEventSchema,'Events');
+const ClubEvent = mongoose.model('Events', clubEventSchema,'Events');
 
 module.exports = ClubEvent;
