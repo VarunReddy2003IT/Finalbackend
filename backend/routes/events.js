@@ -1,34 +1,15 @@
 const express = require('express');
-const ClubEvent = require('../models/ClubEvent'); // Import the ClubEvent model
 const router = express.Router();
+const Event = require('../models/events'); // Import your events model
 
-// GET: Fetch all events (upcoming and past)
+// Get all events
 router.get('/', async (req, res) => {
   try {
-    const upcomingEvents = await ClubEvent.find({ type: 'upcoming' });
-    const pastEvents = await ClubEvent.find({ type: 'past' });
-
-    res.json({
-      upcoming: upcomingEvents,
-      past: pastEvents
-    });
+    const events = await Event.find(); // Fetch all events
+    res.json(events);
   } catch (error) {
     console.error('Error fetching events:', error);
-    res.status(500).json({ message: 'Failed to fetch events' });
-  }
-});
-
-// POST: Add a new event
-router.post('/', async (req, res) => {
-  const { name, description, image, type } = req.body;
-
-  try {
-    const newEvent = new ClubEvent({ name, description, image, type });
-    await newEvent.save();
-    res.status(201).json({ message: 'Event added successfully', event: newEvent });
-  } catch (error) {
-    console.error('Error adding event:', error);
-    res.status(400).json({ message: 'Failed to add event' });
+    res.status(500).json({ error: 'Failed to fetch events' });
   }
 });
 
