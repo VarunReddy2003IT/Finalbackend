@@ -1,7 +1,10 @@
+// routes/profile.js
 const express = require('express');
 const router = express.Router();
-const { Admin, Lead, Member } = require('../models/profile');
-const cloudinary = require('../cloudinaryConfig');
+const Admin = require('../models/admin');
+const Lead = require('../models/lead');
+const Member = require('../models/member');
+const cloudinary = require('../utils/cloudinaryConfig');
 const multer = require('multer');
 const upload = multer({ storage: multer.memoryStorage() });
 
@@ -30,7 +33,6 @@ router.get('/api/profile/:email', async (req, res) => {
       return res.status(404).json({ message: 'Profile not found' });
     }
 
-    // Remove password from response
     const { password, ...profileData } = userProfile.toObject();
     res.json(profileData);
 
@@ -45,7 +47,6 @@ router.post('/api/upload-avatar', upload.single('avatar'), async (req, res) => {
   try {
     const { email, role } = req.body;
     
-    // Upload to Cloudinary
     const result = await new Promise((resolve, reject) => {
       const uploadStream = cloudinary.uploader.upload_stream(
         {
@@ -60,7 +61,6 @@ router.post('/api/upload-avatar', upload.single('avatar'), async (req, res) => {
       uploadStream.end(req.file.buffer);
     });
 
-    // Update avatar based on role
     let userProfile;
     switch (role) {
       case 'admin':
@@ -102,7 +102,6 @@ router.put('/api/profile/:email', async (req, res) => {
     const { role, ...updateData } = req.body;
     let userProfile;
 
-    // Remove password if it exists in updateData
     delete updateData.password;
 
     switch (role) {
@@ -135,7 +134,6 @@ router.put('/api/profile/:email', async (req, res) => {
       return res.status(404).json({ message: 'Profile not found' });
     }
 
-    // Remove password from response
     const { password, ...profileData } = userProfile.toObject();
     res.json(profileData);
   } catch (error) {
