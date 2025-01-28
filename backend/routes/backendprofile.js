@@ -1,9 +1,9 @@
-// backend/routes/profile.js
 const express = require('express');
 const router = express.Router();
 const cloudinary = require('../utils/cloudinaryConfig'); // Your cloudinary config
 const multer = require('multer');
-const upload = multer(); // Handle file uploads in memory
+const storage = multer.memoryStorage();  // Use memory storage to store file buffer in memory
+const upload = multer({ storage: storage }); // Handle file uploads in memory
 
 // Image upload route
 router.post('/upload-image', upload.single('file'), async (req, res) => {
