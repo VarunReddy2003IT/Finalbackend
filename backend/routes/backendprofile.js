@@ -8,7 +8,7 @@ const cloudinary = require('../utils/cloudinaryConfig');
 // Get user profile data
 router.get('/:email', async (req, res) => {
     try {
-        const user = await User.findOne({ email: req.params.email });
+        const user = await localStorage.userRole.findOne({ email: req.params.email });
         if (!user) {
             return res.status(404).json({ error: 'User not found' });
         }
