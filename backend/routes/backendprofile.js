@@ -1,4 +1,3 @@
-// routes/profile.js
 const express = require('express');
 const router = express.Router();
 const Admin = require('../models/admin');
@@ -6,51 +5,123 @@ const Lead = require('../models/lead');
 const Member = require('../models/member');
 const cloudinary = require('../utils/cloudinaryConfig');
 const multer = require('multer');
-const upload = multer({ storage: multer.memoryStorage() });
+const { body, validationResult } = require('express-validator');
+const upload = multer({ 
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 5 * 1024 * 1024 // 5MB limit
+  }
+});
+
+// Helper function to get model based on role
+const getModelByRole = (role) => {
+  const models = {
+    admin: Admin,
+    lead: Lead,
+    member: Member
+  };
+  return models[role];
+};
+
+// Validation middleware
+const validateProfileUpdate = [
+  body('firstName').trim().notEmpty().withMessage('First name is required'),
+  body('lastName').trim().notEmpty().withMessage('Last name is required'),
+  body('email').isEmail().withMessage('Valid email is required'),
+  body('role').isIn(['admin', 'lead', 'member']).withMessage('Invalid role')
+];
 
 // Get profile based on role
-router.get('/api/profile/:email', async (req, res) => {
+router.get('/:email', async (req, res) => {
   try {
     const { email } = req.params;
-    const role = req.query.role;
-    let userProfile;
+    const role = req.query.role?.toLowerCase();
 
-    switch (role) {
-      case 'admin':
-        userProfile = await Admin.findOne({ email });
-        break;
-      case 'lead':
-        userProfile = await Lead.findOne({ email });
-        break;
-      case 'member':
-        userProfile = await Member.findOne({ email });
-        break;
-      default:
-        return res.status(400).json({ message: 'Invalid role' });
+    if (!email || !role) {
+      return res.status(400).json({ 
+        success: false,
+        message: 'Email and role are required' 
+      });
     }
 
+    const Model = getModelByRole(role);
+    if (!Model) {
+      return res.status(400).json({ 
+        success: false,
+        message: 'Invalid role' 
+      });
+    }
+
+    const userProfile = await Model.findOne({ email });
     if (!userProfile) {
-      return res.status(404).json({ message: 'Profile not found' });
+      return res.status(404).json({ 
+        success: false,
+        message: 'Profile not found' 
+      });
     }
 
-    const { password, ...profileData } = userProfile.toObject();
-    res.json(profileData);
+    const { password, __v, ...profileData } = userProfile.toObject();
+    res.json({
+      success: true,
+      data: profileData
+    });
 
   } catch (error) {
     console.error('Profile fetch error:', error);
-    res.status(500).json({ message: 'Error fetching profile' });
+    res.status(500).json({ 
+      success: false,
+      message: 'Error fetching profile',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
   }
 });
 
 // Upload avatar
-router.post('/api/upload-avatar', upload.single('avatar'), async (req, res) => {
+router.post('/upload-avatar', upload.single('avatar'), async (req, res) => {
   try {
     const { email, role } = req.body;
-    
+
+    if (!req.file) {
+      return res.status(400).json({ 
+        success: false,
+        message: 'No file uploaded' 
+      });
+    }
+
+    if (!email || !role) {
+      return res.status(400).json({ 
+        success: false,
+        message: 'Email and role are required' 
+      });
+    }
+
+    const Model = getModelByRole(role);
+    if (!Model) {
+      return res.status(400).json({ 
+        success: false,
+        message: 'Invalid role' 
+      });
+    }
+
+    // Check if user exists
+    const existingUser = await Model.findOne({ email });
+    if (!existingUser) {
+      return res.status(404).json({ 
+        success: false,
+        message: 'User not found' 
+      });
+    }
+
+    // Upload to cloudinary
     const result = await new Promise((resolve, reject) => {
       const uploadStream = cloudinary.uploader.upload_stream(
         {
-          folder: 'avatars'
+          folder: 'avatars',
+          resource_type: 'image',
+          allowed_formats: ['jpg', 'png', 'jpeg'],
+          transformation: [
+            { width: 400, height: 400, crop: 'fill' }
+          ]
         },
         (error, result) => {
           if (error) reject(error);
@@ -61,84 +132,96 @@ router.post('/api/upload-avatar', upload.single('avatar'), async (req, res) => {
       uploadStream.end(req.file.buffer);
     });
 
-    let userProfile;
-    switch (role) {
-      case 'admin':
-        userProfile = await Admin.findOneAndUpdate(
-          { email },
-          { avatar: result.secure_url },
-          { new: true }
-        );
-        break;
-      case 'lead':
-        userProfile = await Lead.findOneAndUpdate(
-          { email },
-          { avatar: result.secure_url },
-          { new: true }
-        );
-        break;
-      case 'member':
-        userProfile = await Member.findOneAndUpdate(
-          { email },
-          { avatar: result.secure_url },
-          { new: true }
-        );
-        break;
-      default:
-        return res.status(400).json({ message: 'Invalid role' });
+    // Update user profile with new avatar
+    const userProfile = await Model.findOneAndUpdate(
+      { email },
+      { 
+        avatar: result.secure_url,
+        avatarPublicId: result.public_id 
+      },
+      { new: true }
+    );
+
+    // Delete old avatar if exists
+    if (existingUser.avatarPublicId) {
+      await cloudinary.uploader.destroy(existingUser.avatarPublicId);
     }
 
-    res.json({ avatarUrl: result.secure_url });
+    res.json({
+      success: true,
+      data: {
+        avatarUrl: result.secure_url
+      }
+    });
+
   } catch (error) {
     console.error('Avatar upload error:', error);
-    res.status(500).json({ message: 'Error uploading avatar' });
+    res.status(500).json({ 
+      success: false,
+      message: 'Error uploading avatar',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
   }
 });
 
 // Update profile
-router.put('/api/profile/:email', async (req, res) => {
+router.put('/:email', validateProfileUpdate, async (req, res) => {
   try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ 
+        success: false,
+        errors: errors.array() 
+      });
+    }
+
     const { email } = req.params;
     const { role, ...updateData } = req.body;
-    let userProfile;
 
+    // Remove sensitive fields from update
     delete updateData.password;
+    delete updateData.email; // Prevent email updates through this endpoint
 
-    switch (role) {
-      case 'admin':
-        userProfile = await Admin.findOneAndUpdate(
-          { email },
-          updateData,
-          { new: true }
-        );
-        break;
-      case 'lead':
-        userProfile = await Lead.findOneAndUpdate(
-          { email },
-          updateData,
-          { new: true }
-        );
-        break;
-      case 'member':
-        userProfile = await Member.findOneAndUpdate(
-          { email },
-          updateData,
-          { new: true }
-        );
-        break;
-      default:
-        return res.status(400).json({ message: 'Invalid role' });
+    const Model = getModelByRole(role);
+    if (!Model) {
+      return res.status(400).json({ 
+        success: false,
+        message: 'Invalid role' 
+      });
     }
+
+    const userProfile = await Model.findOneAndUpdate(
+      { email },
+      { 
+        ...updateData,
+        updatedAt: new Date()
+      },
+      { 
+        new: true,
+        runValidators: true 
+      }
+    );
 
     if (!userProfile) {
-      return res.status(404).json({ message: 'Profile not found' });
+      return res.status(404).json({ 
+        success: false,
+        message: 'Profile not found' 
+      });
     }
 
-    const { password, ...profileData } = userProfile.toObject();
-    res.json(profileData);
+    const { password, __v, ...profileData } = userProfile.toObject();
+    res.json({
+      success: true,
+      data: profileData
+    });
+
   } catch (error) {
     console.error('Profile update error:', error);
-    res.status(500).json({ message: 'Error updating profile' });
+    res.status(500).json({ 
+      success: false,
+      message: 'Error updating profile',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
   }
 });
 
