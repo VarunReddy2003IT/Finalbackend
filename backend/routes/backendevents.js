@@ -61,10 +61,10 @@ router.get('/club/:clubName', async (req, res) => {
   }
 });
 
-// Fetch upcoming events
+// Fetch upcoming events for technical clubtype
 router.get('/upcoming', async (req, res) => {
   try {
-    const events = await Event.find({ type: 'upcoming' });
+    const events = await Event.find({ clubtype: 'technical', type: 'upcoming' });
     res.json(events);
   } catch (error) {
     console.error('Error fetching upcoming events:', error);
@@ -72,10 +72,10 @@ router.get('/upcoming', async (req, res) => {
   }
 });
 
-// Fetch past events
+// Fetch past events for technical clubtype
 router.get('/past', async (req, res) => {
   try {
-    const events = await Event.find({ type: 'past' });
+    const events = await Event.find({ clubtype: 'technical', type: 'past' });
     res.json(events);
   } catch (error) {
     console.error('Error fetching past events:', error);
