@@ -28,6 +28,8 @@ app.use((err, req, res, next) => {
 
 // Routes
 app.use('/api/events', require('./routes/backendevents'));
+app.use('/api/events/add', require('./routes/backendevents/add'));
+
 app.use('/api/login', require('./routes/backendlogin'));
 app.use('/api/signup', require('./routes/backendsignup'));
 app.use('/api/profile', require('./routes/backendprofile'));
