@@ -4,12 +4,13 @@ const Admin = require('../models/admin');
 const Lead = require('../models/lead');
 const Member = require('../models/member');
 
-// Get user profile based on role and email
-router.get('/profile', async (req, res) => {
+router.get('/', async (req, res) => {
     try {
         const { email, role } = req.query;
 
+        // Input validation
         if (!email || !role) {
+            console.log('Missing required fields:', { email, role });
             return res.status(400).json({
                 success: false,
                 message: 'Email and role are required'
@@ -29,6 +30,7 @@ router.get('/profile', async (req, res) => {
                 Model = Member;
                 break;
             default:
+                console.log('Invalid role provided:', role);
                 return res.status(400).json({
                     success: false,
                     message: 'Invalid role'
@@ -37,23 +39,26 @@ router.get('/profile', async (req, res) => {
 
         // Find user in the appropriate collection
         const userData = await Model.findOne(
-            { email },
-            { name: 1, email: 1, _id: 0 }  // Only retrieve name and email
+            { email: email.toLowerCase() },
+            { name: 1, email: 1, _id: 0 }
         );
 
         if (!userData) {
+            console.log('User not found:', { email, role });
             return res.status(404).json({
                 success: false,
                 message: `User not found in ${role} database`
             });
         }
 
+        console.log('User found:', userData);
         res.status(200).json({
             success: true,
             data: userData
         });
 
     } catch (error) {
+        console.error('Profile route error:', error);
         res.status(500).json({
             success: false,
             message: 'Error retrieving user profile'
