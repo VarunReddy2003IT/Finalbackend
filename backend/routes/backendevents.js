@@ -16,11 +16,16 @@ router.get('/', async (req, res) => {
 // Create a new event
 router.post('/add', async (req, res) => {
   try {
-    const { eventname, clubtype, club, image, date, description, type } = req.body;
+    const { eventname, clubtype, club, image, date, description, type, registrationLink } = req.body;
 
     // Validate required fields
     if (!eventname || !clubtype || !club || !date || !type) {
       return res.status(400).json({ error: 'Missing required fields' });
+    }
+
+    // Validate registration link for upcoming events
+    if (type === 'upcoming' && !registrationLink) {
+      return res.status(400).json({ error: 'Registration link is required for upcoming events' });
     }
 
     // Create new event object
@@ -30,8 +35,9 @@ router.post('/add', async (req, res) => {
       club,
       image: image || '',
       date,
-      description, // Added description field
-      type
+      description,
+      type,
+      registrationLink: type === 'upcoming' ? registrationLink : undefined
     });
 
     // Save the event
