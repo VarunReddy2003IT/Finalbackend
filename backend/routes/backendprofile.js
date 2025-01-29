@@ -67,7 +67,7 @@ router.get('/', async (req, res) => {
 router.post('/update-profile', async (req, res) => {
     try {
         const { email, role, imageUrl } = req.body;
-
+        console.log(imageUrl);
         if (!email || !role || !imageUrl) {
             console.log('Missing required fields:', { email, role, imageUrl });
             return res.status(400).json({
