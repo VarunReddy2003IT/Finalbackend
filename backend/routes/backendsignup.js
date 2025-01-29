@@ -44,7 +44,7 @@ router.post('/', async (req, res) => {
       if (!club) {
         return res.status(400).json({ message: 'Club selection is required for lead role' });
       }
-      if (!validClubs.includes(club)) {
+      if (!clubs.includes(club)) {
         return res.status(400).json({ message: 'Invalid club selection' });
       }
     }
