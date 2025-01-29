@@ -16,8 +16,8 @@ connectDB();
 app.use('/api/events', require('./routes/backendevents'));
 app.use('/api/login', require('./routes/backendlogin'));
 app.use('/api/signup', require('./routes/backendsignup'));
-app.use('/api/upload-image', require('./routes/uploadimage'));
-
+const profileRoutes = require('./routes/backendprofile');
+app.use('/api', profileRoutes);
 // Start the server
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
