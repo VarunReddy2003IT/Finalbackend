@@ -97,7 +97,7 @@ router.post('/update-profile', async (req, res) => {
 
         const updatedUser = await Model.findOneAndUpdate(
             { email: email.toLowerCase() },
-            { $set: { imageUrl } },
+            { $set : { imageUrl } },
             { new: true }
         );
 
