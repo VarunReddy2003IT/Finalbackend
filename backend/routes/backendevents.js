@@ -62,9 +62,10 @@ router.get('/club/:clubName', async (req, res) => {
 });
 
 // Fetch upcoming events for technical clubtype
-router.get('/upcoming', async (req, res) => {
+router.get('/upcoming/:clubType', async (req, res) => {
   try {
-    const events = await Event.find({ clubtype: 'Technical', type: 'upcoming' });
+
+    const events = await Event.find({ clubtype: clubType, type: 'upcoming' });
     res.json(events);
   } catch (error) {
     console.error('Error fetching upcoming events:', error);
