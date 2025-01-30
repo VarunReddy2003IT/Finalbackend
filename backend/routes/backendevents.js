@@ -28,6 +28,11 @@ router.post('/add', async (req, res) => {
       return res.status(400).json({ error: 'Registration link is required for upcoming events' });
     }
 
+    // Validate clubtype
+    if (!['Technical', 'Social'].includes(clubtype)) {
+      return res.status(400).json({ error: 'Invalid clubtype. Must be either Technical or Social' });
+    }
+
     // Create new event object
     const newEvent = new Event({
       eventname,
@@ -61,10 +66,18 @@ router.get('/club/:clubName', async (req, res) => {
   }
 });
 
-// Fetch upcoming events for technical clubtype
-router.get('/upcoming', async (req, res) => {
+// Fetch upcoming events by clubtype
+router.get('/upcoming/:clubtype?', async (req, res) => {
   try {
-    const events = await Event.find({ clubtype: 'Technical', type: 'upcoming' });
+    const { clubtype } = req.params;
+    const query = { type: 'upcoming' };
+    
+    // Add clubtype to query if provided
+    if (clubtype) {
+      query.clubtype = clubtype;
+    }
+    
+    const events = await Event.find(query);
     res.json(events);
   } catch (error) {
     console.error('Error fetching upcoming events:', error);
@@ -72,14 +85,34 @@ router.get('/upcoming', async (req, res) => {
   }
 });
 
-// Fetch past events for technical clubtype
-router.get('/past', async (req, res) => {
+// Fetch past events by clubtype
+router.get('/past/:clubtype?', async (req, res) => {
   try {
-    const events = await Event.find({ clubtype: 'Technical', type: 'past' });
+    const { clubtype } = req.params;
+    const query = { type: 'past' };
+    
+    // Add clubtype to query if provided
+    if (clubtype) {
+      query.clubtype = clubtype;
+    }
+    
+    const events = await Event.find(query);
     res.json(events);
   } catch (error) {
     console.error('Error fetching past events:', error);
     res.status(500).json({ error: 'Failed to fetch past events' });
+  }
+});
+
+// Fetch all events by clubtype
+router.get('/clubtype/:clubtype', async (req, res) => {
+  try {
+    const { clubtype } = req.params;
+    const events = await Event.find({ clubtype });
+    res.json(events);
+  } catch (error) {
+    console.error('Error fetching events by clubtype:', error);
+    res.status(500).json({ error: 'Failed to fetch events' });
   }
 });
 
