@@ -37,7 +37,7 @@ router.get('/', async (req, res) => {
 
         const userData = await Model.findOne(
             { email: email.toLowerCase() },
-            { name: 1, email: 1, imageUrl: 1, _id: 0 } // Include imageUrl in the response
+            { name: 1, email: 1, imageUrl: 1,club:1, _id: 0 } // Include imageUrl in the response
         );
 
         if (!userData) {
