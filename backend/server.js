@@ -5,11 +5,12 @@ const connectDB = require('./utils/dbconnection');
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// Enhanced CORS configuration
+// Enhanced CORS configuration with logging
 app.use(cors({
-    origin: '*',
-    methods: ['GET', 'POST', 'PUT', 'DELETE'],
-    credentials: true
+    origin: '*', // Allow all origins
+    methods: ['GET', 'POST', 'PUT', 'DELETE'], // Allow specific methods
+    allowedHeaders: ['Content-Type', 'Authorization'], // Optional: Allow specific headers
+    credentials: true // Allow cookies or credentials (if necessary)
 }));
 
 app.use(express.json());
@@ -28,7 +29,6 @@ app.use((err, req, res, next) => {
 
 // Routes
 app.use('/api/events', require('./routes/backendevents'));
-
 app.use('/api/login', require('./routes/backendlogin'));
 app.use('/api/signup', require('./routes/backendsignup'));
 app.use('/api/profile', require('./routes/backendprofile'));
