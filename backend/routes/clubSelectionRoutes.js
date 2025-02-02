@@ -155,112 +155,61 @@ router.post('/select-clubs', async (req, res) => {
 
 // Route to handle approval/rejection via email links
 router.get('/approve/:token/:approved', async (req, res) => {
-  try {
-    const { token, approved } = req.params;
-    const isApproved = approved === 'true';
-
-    // Get request details from token
-    const requestDetails = pendingApprovals.get(token);
-    if (!requestDetails) {
-      return res.status(404).send('Invalid or expired approval link');
-    }
-
-    const { memberEmail, club } = requestDetails;
-
-    // Find member
-    const member = await Member.findOne({ email: memberEmail });
-    if (!member) {
-      return res.status(404).send('Member not found');
-    }
-
-    // Remove from pending clubs
-    member.pendingClubs = member.pendingClubs.filter(c => c !== club);
-
-    if (isApproved) {
-      // Add to selected clubs if approved
-      if (!member.selectedClubs) {
-        member.selectedClubs = [];
+    try {
+      const { token, approved } = req.params;
+      const isApproved = approved === 'true';
+  
+      // Validate token
+      if (!pendingApprovals.has(token)) {
+        return res.status(404).send('Invalid or expired approval link');
       }
-      member.selectedClubs.push(club);
-
-      // Send approval notification to member
-      const mailOptions = {
-        from: 'varunreddy2new@gmail.com',
-        to: memberEmail,
-        subject: `Welcome to ${club}!`,
-        html: `
-          <div style="font-family: Arial, sans-serif; padding: 20px; max-width: 600px; margin: 0 auto; background-color: #f9f9f9; border-radius: 10px;">
-            <h2 style="color: #28a745; text-align: center;">Congratulations! 🎉</h2>
-            <div style="background-color: #ffffff; padding: 20px; border-radius: 8px; margin: 20px 0; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
-              <p style="font-size: 1.1em; color: #2c3e50;">Your request to join <strong>${club}</strong> has been approved!</p>
-              <p style="color: #666;">Welcome to the team! We're excited to have you on board.</p>
-            </div>
-          </div>
-        `
-      };
-
-      await transporter.sendMail(mailOptions);
-    } else {
-      // Send rejection notification to member
-      const mailOptions = {
-        from: 'varunreddy2new@gmail.com',
-        to: memberEmail,
-        subject: `Update on ${club} Club Request`,
-        html: `
-          <div style="font-family: Arial, sans-serif; padding: 20px; max-width: 600px; margin: 0 auto; background-color: #f9f9f9; border-radius: 10px;">
-            <h2 style="color: #dc3545; text-align: center;">Club Request Update</h2>
-            <div style="background-color: #ffffff; padding: 20px; border-radius: 8px; margin: 20px 0; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
-              <p style="font-size: 1.1em; color: #2c3e50;">Your request to join <strong>${club}</strong> was not approved at this time.</p>
-              <p style="color: #666;">Feel free to try again in the future or reach out to the club leads for more information.</p>
-            </div>
-          </div>
-        `
-      };
-
-      await transporter.sendMail(mailOptions);
+  
+      const { memberEmail, club } = pendingApprovals.get(token);
+      pendingApprovals.delete(token); // Remove token to prevent reuse
+  
+      // Find the member
+      const member = await Member.findOne({ email: memberEmail });
+      if (!member) {
+        return res.status(404).send('Member not found');
+      }
+  
+      // Remove from pending clubs
+      member.pendingClubs = member.pendingClubs.filter(c => c !== club);
+  
+      if (isApproved) {
+        if (!member.selectedClubs) {
+          member.selectedClubs = [];
+        }
+        member.selectedClubs.push(club);
+  
+        // Send approval email
+        await transporter.sendMail({
+          from: 'varunreddy2new@gmail.com',
+          to: memberEmail,
+          subject: `Welcome to ${club}!`,
+          text: `Congratulations! You have been approved to join ${club}.`
+        });
+  
+      } else {
+        // Send rejection email
+        await transporter.sendMail({
+          from: 'varunreddy2new@gmail.com',
+          to: memberEmail,
+          subject: `Update on ${club} Club Request`,
+          text: `Sorry, your request to join ${club} was not approved.`
+        });
+      }
+  
+      await member.save(); // Ensure database is updated
+  
+      res.send(`<h1>${isApproved ? 'Request Approved' : 'Request Rejected'}</h1><p>The member has been notified.</p>`);
+  
+    } catch (error) {
+      console.error('Approval handling error:', error);
+      res.status(500).send('An error occurred while processing the approval');
     }
-
-    await member.save();
-    pendingApprovals.delete(token);
-
-    // Send a response page
-    res.send(`
-      <html>
-        <head>
-          <style>
-            body {
-              font-family: Arial, sans-serif;
-              display: flex;
-              justify-content: center;
-              align-items: center;
-              height: 100vh;
-              margin: 0;
-              background-color: #f9f9f9;
-            }
-            .container {
-              text-align: center;
-              padding: 40px;
-              background-color: white;
-              border-radius: 10px;
-              box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            }
-            h1 { color: ${isApproved ? '#28a745' : '#dc3545'}; }
-          </style>
-        </head>
-        <body>
-          <div class="container">
-            <h1>${isApproved ? 'Request Approved' : 'Request Rejected'}</h1>
-            <p>The member has been notified via email.</p>
-          </div>
-        </body>
-      </html>
-    `);
-
-  } catch (error) {
-    console.error('Approval handling error:', error);
-    res.status(500).send('An error occurred while processing the approval');
-  }
-});
+  });
+  
 
 // Route to get member's clubs (both selected and pending)
 router.get('/selected-clubs/:email', async (req, res) => {
