@@ -3,122 +3,213 @@ const router = require('express').Router();
 const Lead = require('../models/lead');
 const Member = require('../models/member');
 
-// Middleware to handle async errors
-const asyncHandler = fn => (req, res, next) => {
-  Promise.resolve(fn(req, res, next)).catch(next);
-};
+// Get all members
+router.get('/all-members', async (req, res) => {
+    try {
+        const { club, searchTerm } = req.query;
+        let query = {};
 
-// Response helper
-const sendResponse = (res, statusCode, success, data = null, message = null) => {
-  const response = { success };
-  if (data) response.data = data;
-  if (message) response.message = message;
-  return res.status(statusCode).json(response);
-};
+        // Add club filter if provided
+        if (club) {
+            query.club = club;
+        }
 
-// Get all members with optional filtering
-router.get('/all-members', asyncHandler(async (req, res) => {
-  const { club, status } = req.query;
-  const query = {};
-  
-  if (club) query.club = club;
-  if (status) query.status = status;
-  
-  const members = await Member.find(query)
-    .select('-password')  // Exclude sensitive data
-    .sort({ createdAt: -1 });
-  
-  return sendResponse(res, 200, true, members);
-}));
+        // Add search filter if provided
+        if (searchTerm) {
+            query.$or = [
+                { name: { $regex: searchTerm, $options: 'i' } },
+                { email: { $regex: searchTerm, $options: 'i' } }
+            ];
+        }
+
+        const members = await Member.find(query)
+            .select('-password')  // Exclude password from results
+            .sort({ name: 1 });   // Sort by name ascending
+
+        res.json({
+            success: true,
+            data: members
+        });
+    } catch (error) {
+        console.error('Error fetching members:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Error fetching members'
+        });
+    }
+});
 
 // Get members by club
-router.get('/members-by-club', asyncHandler(async (req, res) => {
-  const { clubName } = req.query;
-  
-  if (!clubName) {
-    return sendResponse(res, 400, false, null, 'Club name is required');
-  }
-  
-  const members = await Member.find({ club: clubName })
-    .select('-password')
-    .sort({ name: 1 });
-  
-  return sendResponse(res, 200, true, members);
-}));
+router.get('/members-by-club', async (req, res) => {
+    try {
+        const { clubName } = req.query;
 
-// Get all leads with optional filtering
-router.get('/all-leads', asyncHandler(async (req, res) => {
-  const { club, status } = req.query;
-  const query = {};
-  
-  if (club) query.club = club;
-  if (status) query.status = status;
-  
-  const leads = await Lead.find(query)
-    .select('-password')
-    .sort({ createdAt: -1 });
-  
-  return sendResponse(res, 200, true, leads);
-}));
+        if (!clubName) {
+            return res.status(400).json({
+                success: false,
+                message: 'Club name is required'
+            });
+        }
 
-// Delete user (member or lead)
-router.delete('/delete-user', asyncHandler(async (req, res) => {
-  const { email, role } = req.body;
+        const members = await Member.find({ club: clubName })
+            .select('-password')
+            .sort({ name: 1 });
 
-  // Input validation
-  if (!email || !role) {
-    return sendResponse(res, 400, false, null, 'Email and role are required');
-  }
+        res.json({
+            success: true,
+            data: members
+        });
+    } catch (error) {
+        console.error('Error fetching members by club:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Error fetching members'
+        });
+    }
+});
 
-  if (!['member', 'lead'].includes(role.toLowerCase())) {
-    return sendResponse(res, 400, false, null, 'Invalid role specified');
-  }
+// Get all leads
+router.get('/all-leads', async (req, res) => {
+    try {
+        const { club, searchTerm } = req.query;
+        let query = {};
 
-  const normalizedEmail = email.toLowerCase();
-  let deletedUser;
+        if (club) {
+            query.club = club;
+        }
 
-  // Delete user based on role
-  if (role === 'member') {
-    deletedUser = await Member.findOneAndDelete({ email: normalizedEmail });
-  } else {
-    deletedUser = await Lead.findOneAndDelete({ email: normalizedEmail });
-  }
+        if (searchTerm) {
+            query.$or = [
+                { name: { $regex: searchTerm, $options: 'i' } },
+                { email: { $regex: searchTerm, $options: 'i' } }
+            ];
+        }
 
-  if (!deletedUser) {
-    return sendResponse(res, 404, false, null, `${role} not found`);
-  }
+        const leads = await Lead.find(query)
+            .select('-password')
+            .sort({ name: 1 });
 
-  return sendResponse(res, 200, true, null, `${role} deleted successfully`);
-}));
+        res.json({
+            success: true,
+            data: leads
+        });
+    } catch (error) {
+        console.error('Error fetching leads:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Error fetching leads'
+        });
+    }
+});
 
-// Update user status
-router.patch('/update-user-status', asyncHandler(async (req, res) => {
-  const { email, role, status } = req.body;
+// Delete user
+router.delete('/delete-user', async (req, res) => {
+    const { email, role } = req.body;
 
-  if (!email || !role || !status) {
-    return sendResponse(res, 400, false, null, 'Email, role, and status are required');
-  }
+    if (!email || !role) {
+        return res.status(400).json({
+            success: false,
+            message: 'Email and role are required'
+        });
+    }
 
-  const Model = role.toLowerCase() === 'member' ? Member : Lead;
-  const normalizedEmail = email.toLowerCase();
+    try {
+        let deletedUser;
+        const normalizedEmail = email.toLowerCase();
 
-  const updatedUser = await Model.findOneAndUpdate(
-    { email: normalizedEmail },
-    { status },
-    { new: true }
-  ).select('-password');
+        if (role === 'member') {
+            deletedUser = await Member.findOneAndDelete({
+                email: normalizedEmail
+            });
+        } else if (role === 'lead') {
+            deletedUser = await Lead.findOneAndDelete({
+                email: normalizedEmail
+            });
+        } else {
+            return res.status(400).json({
+                success: false,
+                message: 'Invalid role specified'
+            });
+        }
 
-  if (!updatedUser) {
-    return sendResponse(res, 404, false, null, `${role} not found`);
-  }
+        if (!deletedUser) {
+            return res.status(404).json({
+                success: false,
+                message: `${role} not found`
+            });
+        }
 
-  return sendResponse(res, 200, true, updatedUser);
-}));
+        res.json({
+            success: true,
+            message: `${role} deleted successfully`,
+            data: deletedUser
+        });
+    } catch (error) {
+        console.error('Error deleting user:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Error deleting user'
+        });
+    }
+});
 
-// Error handling middleware
-router.use((err, req, res, next) => {
-  console.error('Route Error:', err);
-  return sendResponse(res, 500, false, null, 'Internal server error');
+// Update user
+router.put('/update-user', async (req, res) => {
+    const { email, role, updates } = req.body;
+
+    if (!email || !role || !updates) {
+        return res.status(400).json({
+            success: false,
+            message: 'Email, role, and updates are required'
+        });
+    }
+
+    try {
+        let updatedUser;
+        const normalizedEmail = email.toLowerCase();
+
+        // Remove sensitive fields from updates
+        delete updates.password;
+        delete updates.email;  // Prevent email changes through this route
+
+        if (role === 'member') {
+            updatedUser = await Member.findOneAndUpdate(
+                { email: normalizedEmail },
+                { $set: updates },
+                { new: true }
+            ).select('-password');
+        } else if (role === 'lead') {
+            updatedUser = await Lead.findOneAndUpdate(
+                { email: normalizedEmail },
+                { $set: updates },
+                { new: true }
+            ).select('-password');
+        } else {
+            return res.status(400).json({
+                success: false,
+                message: 'Invalid role specified'
+            });
+        }
+
+        if (!updatedUser) {
+            return res.status(404).json({
+                success: false,
+                message: `${role} not found`
+            });
+        }
+
+        res.json({
+            success: true,
+            message: `${role} updated successfully`,
+            data: updatedUser
+        });
+    } catch (error) {
+        console.error('Error updating user:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Error updating user'
+        });
+    }
 });
 
 module.exports = router;
