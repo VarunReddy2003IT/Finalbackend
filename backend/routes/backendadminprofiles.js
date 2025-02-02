@@ -1,4 +1,3 @@
-// routes/admin.js
 const router = require('express').Router();
 const Lead = require('../models/lead');
 const Member = require('../models/member');
@@ -6,26 +5,7 @@ const Member = require('../models/member');
 // Get all members
 router.get('/all-members', async (req, res) => {
     try {
-        const { club, searchTerm } = req.query;
-        let query = {};
-
-        // Add club filter if provided
-        if (club) {
-            query.club = club;
-        }
-
-        // Add search filter if provided
-        if (searchTerm) {
-            query.$or = [
-                { name: { $regex: searchTerm, $options: 'i' } },
-                { email: { $regex: searchTerm, $options: 'i' } }
-            ];
-        }
-
-        const members = await Member.find(query)
-            .select('-password')  // Exclude password from results
-            .sort({ name: 1 });   // Sort by name ascending
-
+        const members = await Member.find({});
         res.json({
             success: true,
             data: members
@@ -39,56 +19,10 @@ router.get('/all-members', async (req, res) => {
     }
 });
 
-// Get members by club
-router.get('/members-by-club', async (req, res) => {
-    try {
-        const { clubName } = req.query;
-
-        if (!clubName) {
-            return res.status(400).json({
-                success: false,
-                message: 'Club name is required'
-            });
-        }
-
-        const members = await Member.find({ club: clubName })
-            .select('-password')
-            .sort({ name: 1 });
-
-        res.json({
-            success: true,
-            data: members
-        });
-    } catch (error) {
-        console.error('Error fetching members by club:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Error fetching members'
-        });
-    }
-});
-
 // Get all leads
 router.get('/all-leads', async (req, res) => {
     try {
-        const { club, searchTerm } = req.query;
-        let query = {};
-
-        if (club) {
-            query.club = club;
-        }
-
-        if (searchTerm) {
-            query.$or = [
-                { name: { $regex: searchTerm, $options: 'i' } },
-                { email: { $regex: searchTerm, $options: 'i' } }
-            ];
-        }
-
-        const leads = await Lead.find(query)
-            .select('-password')
-            .sort({ name: 1 });
-
+        const leads = await Lead.find({});
         res.json({
             success: true,
             data: leads
@@ -115,15 +49,14 @@ router.delete('/delete-user', async (req, res) => {
 
     try {
         let deletedUser;
-        const normalizedEmail = email.toLowerCase();
-
+        
         if (role === 'member') {
-            deletedUser = await Member.findOneAndDelete({
-                email: normalizedEmail
+            deletedUser = await Member.findOneAndDelete({ 
+                email: email.toLowerCase() 
             });
         } else if (role === 'lead') {
-            deletedUser = await Lead.findOneAndDelete({
-                email: normalizedEmail
+            deletedUser = await Lead.findOneAndDelete({ 
+                email: email.toLowerCase() 
             });
         } else {
             return res.status(400).json({
@@ -131,18 +64,17 @@ router.delete('/delete-user', async (req, res) => {
                 message: 'Invalid role specified'
             });
         }
-
+        
         if (!deletedUser) {
             return res.status(404).json({
                 success: false,
-                message: `${role} not found`
+                message: '${role} not found'
             });
         }
 
         res.json({
             success: true,
-            message: `${role} deleted successfully`,
-            data: deletedUser
+            message: '${role} deleted successfully'
         });
     } catch (error) {
         console.error('Error deleting user:', error);
@@ -152,64 +84,76 @@ router.delete('/delete-user', async (req, res) => {
         });
     }
 });
+// Get members by club name
+router.get('/members-by-club', async (req, res) => {
+    const { clubName } = req.query; // Get club name from query parameters
 
-// Update user
-router.put('/update-user', async (req, res) => {
-    const { email, role, updates } = req.body;
-
-    if (!email || !role || !updates) {
+    if (!clubName) {
         return res.status(400).json({
             success: false,
-            message: 'Email, role, and updates are required'
+            message: 'Club name is required'
         });
     }
 
     try {
-        let updatedUser;
-        const normalizedEmail = email.toLowerCase();
-
-        // Remove sensitive fields from updates
-        delete updates.password;
-        delete updates.email;  // Prevent email changes through this route
-
-        if (role === 'member') {
-            updatedUser = await Member.findOneAndUpdate(
-                { email: normalizedEmail },
-                { $set: updates },
-                { new: true }
-            ).select('-password');
-        } else if (role === 'lead') {
-            updatedUser = await Lead.findOneAndUpdate(
-                { email: normalizedEmail },
-                { $set: updates },
-                { new: true }
-            ).select('-password');
-        } else {
-            return res.status(400).json({
-                success: false,
-                message: 'Invalid role specified'
-            });
-        }
-
-        if (!updatedUser) {
-            return res.status(404).json({
-                success: false,
-                message: `${role} not found`
-            });
-        }
+        // Find members whose selectedClubs array contains the clubName
+        const members = await Member.find({
+            selectedClubs: clubName
+        });
 
         res.json({
             success: true,
-            message: `${role} updated successfully`,
-            data: updatedUser
+            data: members
         });
     } catch (error) {
-        console.error('Error updating user:', error);
+        console.error('Error fetching members by club:', error);
         res.status(500).json({
             success: false,
-            message: 'Error updating user'
+            message: 'Error fetching members by club'
         });
     }
 });
+
+// Remove a club from a member's selectedClubs array
+router.put('/remove-club', async (req, res) => {
+    const { email, clubName } = req.body;
+
+    if (!email || !clubName) {
+        return res.status(400).json({
+            success: false,
+            message: 'Email and club name are required'
+        });
+    }
+
+    try {
+        const member = await Member.findOne({ email: email.toLowerCase() });
+
+        if (!member) {
+            return res.status(404).json({
+                success: false,
+                message: 'Member not found'
+            });
+        }
+
+        // Remove the club from the selectedClubs array
+        const updatedClubs = member.selectedClubs.filter(club => club !== clubName);
+
+        // Update the member's selectedClubs
+        member.selectedClubs = updatedClubs;
+        await member.save();
+
+        res.json({
+            success: true,
+            message: 'Club removed successfully'
+        });
+    } catch (error) {
+        console.error('Error removing club from member:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Error removing club from member'
+        });
+    }
+});
+
 
 module.exports = router;
