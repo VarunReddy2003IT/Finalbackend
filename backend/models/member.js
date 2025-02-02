@@ -5,9 +5,10 @@ const memberSchema = new mongoose.Schema({
   collegeId: { type: String, required: true },
   email: { type: String, required: true, unique: true },
   password: { type: String, required: true },
-  assignedTasks: { type: [String], default: [] }, // Tasks assigned to the member
-  createdAt: { type: Date, default: Date.now }, // Timestamp for account creation
+  assignedTasks: { type: [String], default: [] },
+  selectedClubs: { type: [String], default: [] }, // Added field for selected clubs
+  createdAt: { type: Date, default: Date.now },
   imageUrl: { type: String, default: null }
 });
 
-module.exports = mongoose.model('Member', memberSchema,'Member');
+module.exports = mongoose.model('Member', memberSchema, 'Member');

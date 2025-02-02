@@ -33,6 +33,7 @@ app.use('/api/login', require('./routes/backendlogin'));
 app.use('/api/signup', require('./routes/backendsignup'));
 app.use('/api/profile', require('./routes/backendprofile'));
 app.use('/api', require('./routes/backendadminprofiles'));
+app.use('/api/club-selection', require('./routes/clubSelectionRoutes'));
 
 // Global error handler
 app.use((err, req, res, next) => {
