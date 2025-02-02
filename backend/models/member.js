@@ -11,4 +11,5 @@ const memberSchema = new mongoose.Schema({
   imageUrl: { type: String, default: null }
 });
 
+
 module.exports = mongoose.model('Member', memberSchema, 'Member');
