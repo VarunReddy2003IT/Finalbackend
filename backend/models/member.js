@@ -5,7 +5,7 @@ const memberSchema = new mongoose.Schema({
   collegeId: { type: String, required: true },
   email: { type: String, required: true, unique: true },
   password: { type: String, required: true },
-  assignedTasks: { type: [String], default: [] },
+  pendingClubs: { type: [String], default: [] },
   selectedClubs: { type: [String], default: [] }, // Added field for selected clubs
   createdAt: { type: Date, default: Date.now },
   imageUrl: { type: String, default: null }
