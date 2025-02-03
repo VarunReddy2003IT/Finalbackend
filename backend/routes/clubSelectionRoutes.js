@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const Member = require('../models/member');
 const Lead = require('../models/lead');
+const Admin = require('../models/admin');
 const nodemailer = require('nodemailer');
 const crypto = require('crypto');
 
@@ -22,30 +23,41 @@ const generateApprovalToken = () => {
 // Store pending approvals temporarily (in production, use a database)
 const pendingApprovals = new Map();
 
-// Route to handle club selection request
+// Route to handle club selection request for both members and leads
 router.post('/select-clubs', async (req, res) => {
   try {
-    const { email, selectedClub } = req.body;
+    const { email, role, selectedClub } = req.body;
 
     // Input validation
-    if (!email || !selectedClub) {
+    if (!email || !selectedClub || !role) {
       return res.status(400).json({
         success: false,
-        message: 'Email and club selection are required'
+        message: 'Email, role, and club selection are required'
       });
     }
 
-    // Find the member and validate
-    const member = await Member.findOne({ email });
-    if (!member) {
+    // Find the user based on role
+    let user;
+    if (role === 'member') {
+      user = await Member.findOne({ email });
+    } else if (role === 'lead') {
+      user = await Lead.findOne({ email });
+    } else {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid role specified'
+      });
+    }
+
+    if (!user) {
       return res.status(404).json({
         success: false,
-        message: 'Member not found'
+        message: 'User not found'
       });
     }
 
     // Check if club is already selected
-    if (member.selectedClubs && member.selectedClubs.includes(selectedClub)) {
+    if (user.selectedClubs && user.selectedClubs.includes(selectedClub)) {
       return res.status(400).json({
         success: false,
         message: 'You are already a member of this club'
@@ -53,35 +65,36 @@ router.post('/select-clubs', async (req, res) => {
     }
 
     // Check if club is already pending
-    if (member.pendingClubs && member.pendingClubs.includes(selectedClub)) {
+    if (user.pendingClubs && user.pendingClubs.includes(selectedClub)) {
       return res.status(400).json({
         success: false,
         message: 'Your request for this club is already pending'
       });
     }
 
-    // Add to pending clubs if not already present
-    if (!member.pendingClubs) {
-      member.pendingClubs = [];
+    // Add to pending clubs
+    if (!user.pendingClubs) {
+      user.pendingClubs = [];
     }
-    member.pendingClubs.push(selectedClub);
-    await member.save();
+    user.pendingClubs.push(selectedClub);
+    await user.save();
 
-    // Find all leads for the selected club
-    const clubLeads = await Lead.find({ club: selectedClub });
-    const leadEmails = clubLeads.map(lead => lead.email);
+    // Find admins to notify
+    const admins = await Admin.find({});
+    const adminEmails = admins.map(admin => admin.email);
 
-    if (leadEmails.length === 0) {
+    if (adminEmails.length === 0) {
       return res.status(200).json({
         success: true,
-        message: 'Request submitted, but no club leads found to notify'
+        message: 'Request submitted, but no admins found to notify'
       });
     }
 
-    // Generate approval token and store request details
+    // Generate approval token
     const approvalToken = generateApprovalToken();
     pendingApprovals.set(approvalToken, {
-      memberEmail: email,
+      email,
+      role,
       club: selectedClub,
       timestamp: new Date()
     });
@@ -94,27 +107,28 @@ router.post('/select-clubs', async (req, res) => {
       }
     }
 
-    // Send email to club leads
+    // Send email to admins
     const mailOptions = {
       from: 'varunreddy2new@gmail.com',
-      to: leadEmails,
-      subject: `New Member Request for ${selectedClub}`,
+      to: adminEmails,
+      subject: `New ${role.charAt(0).toUpperCase() + role.slice(1)} Request for ${selectedClub}`,
       html: `
         <div style="font-family: Arial, sans-serif; padding: 20px; max-width: 600px; margin: 0 auto; background-color: #f9f9f9; border-radius: 10px;">
           <h2 style="color: #2c3e50; text-align: center; border-bottom: 2px solid #eee; padding-bottom: 10px;">
-            New Member Request
+            New ${role.charAt(0).toUpperCase() + role.slice(1)} Request
           </h2>
           
           <div style="background-color: #ffffff; padding: 20px; border-radius: 8px; margin: 20px 0; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
-            <h3 style="color: #34495e; margin-bottom: 15px;">Member Details:</h3>
-            <p style="margin: 5px 0;"><strong>Name:</strong> ${member.name}</p>
-            <p style="margin: 5px 0;"><strong>Email:</strong> ${member.email}</p>
-            <p style="margin: 5px 0;"><strong>College ID:</strong> ${member.collegeId}</p>
+            <h3 style="color: #34495e; margin-bottom: 15px;">User Details:</h3>
+            <p style="margin: 5px 0;"><strong>Name:</strong> ${user.name}</p>
+            <p style="margin: 5px 0;"><strong>Email:</strong> ${user.email}</p>
+            <p style="margin: 5px 0;"><strong>Role:</strong> ${role}</p>
+            ${role === 'member' ? `<p style="margin: 5px 0;"><strong>College ID:</strong> ${user.collegeId}</p>` : ''}
           </div>
           
           <div style="text-align: center; margin: 30px 0;">
             <p style="color: #666; margin-bottom: 20px;">
-              This member has requested to join <strong>${selectedClub}</strong>.
+              This user has requested to join <strong>${selectedClub}</strong> as a ${role}.
             </p>
             
             <div style="margin: 20px 0;">
@@ -129,10 +143,6 @@ router.post('/select-clubs', async (req, res) => {
               </a>
             </div>
           </div>
-          
-          <p style="color: #666; font-size: 0.9em; text-align: center; margin-top: 20px;">
-            You can also contact the member directly at ${member.email} if you need additional information.
-          </p>
         </div>
       `
     };
@@ -141,7 +151,7 @@ router.post('/select-clubs', async (req, res) => {
 
     res.status(200).json({
       success: true,
-      message: 'Club request submitted successfully and leads have been notified'
+      message: 'Club request submitted successfully and admins have been notified'
     });
 
   } catch (error) {
@@ -153,86 +163,133 @@ router.post('/select-clubs', async (req, res) => {
   }
 });
 
-// Route to handle approval/rejection via email links
+// Route to handle approval/rejection
 router.get('/approve/:token/:approved', async (req, res) => {
-    try {
-      const { token, approved } = req.params;
-      const isApproved = approved === 'true';
-  
-      // Validate token
-      if (!pendingApprovals.has(token)) {
-        return res.status(404).send('Invalid or expired approval link');
-      }
-  
-      const { memberEmail, club } = pendingApprovals.get(token);
-      pendingApprovals.delete(token); // Remove token to prevent reuse
-  
-      // Find the member
-      const member = await Member.findOne({ email: memberEmail });
-      if (!member) {
-        return res.status(404).send('Member not found');
-      }
-  
-      // Remove from pending clubs
-      member.pendingClubs = member.pendingClubs.filter(c => c !== club);
-  
-      if (isApproved) {
-        if (!member.selectedClubs) {
-          member.selectedClubs = [];
-        }
-        member.selectedClubs.push(club);
-  
-        // Send approval email
-        await transporter.sendMail({
-          from: 'varunreddy2new@gmail.com',
-          to: memberEmail,
-          subject: `Welcome to ${club}!`,
-          text: `Congratulations! You have been approved to join ${club}.`
-        });
-  
-      } else {
-        // Send rejection email
-        await transporter.sendMail({
-          from: 'varunreddy2new@gmail.com',
-          to: memberEmail,
-          subject: `Update on ${club} Club Request`,
-          text: `Sorry, your request to join ${club} was not approved.`
-        });
-      }
-  
-      await member.save(); // Ensure database is updated
-  
-      res.send(`<h1>${isApproved ? 'Request Approved' : 'Request Rejected'}</h1><p>The member has been notified.</p>`);
-  
-    } catch (error) {
-      console.error('Approval handling error:', error);
-      res.status(500).send('An error occurred while processing the approval');
-    }
-  });
-  
-
-// Route to get member's clubs (both selected and pending)
-router.get('/selected-clubs/:email', async (req, res) => {
   try {
-    const member = await Member.findOne({ email: req.params.email });
-    if (!member) {
+    const { token, approved } = req.params;
+    const isApproved = approved === 'true';
+
+    if (!pendingApprovals.has(token)) {
+      return res.status(404).send('Invalid or expired approval link');
+    }
+
+    const { email, role, club } = pendingApprovals.get(token);
+    pendingApprovals.delete(token);
+
+    // Find user based on role
+    let user;
+    if (role === 'member') {
+      user = await Member.findOne({ email });
+    } else if (role === 'lead') {
+      user = await Lead.findOne({ email });
+    }
+
+    if (!user) {
+      return res.status(404).send('User not found');
+    }
+
+    // Remove from pending clubs
+    user.pendingClubs = user.pendingClubs.filter(c => c !== club);
+
+    if (isApproved) {
+      // Initialize selectedClubs array if it doesn't exist
+      if (!user.selectedClubs) {
+        user.selectedClubs = [];
+      }
+      user.selectedClubs.push(club);
+
+      // Send approval email
+      await transporter.sendMail({
+        from: 'varunreddy2new@gmail.com',
+        to: email,
+        subject: `${club} Club Request Approved!`,
+        html: `
+          <div style="font-family: Arial, sans-serif; padding: 20px; max-width: 600px; margin: 0 auto; background-color: #f9f9f9; border-radius: 10px;">
+            <h2 style="color: #2c3e50; text-align: center;">Congratulations!</h2>
+            <div style="background-color: #ffffff; padding: 20px; border-radius: 8px; margin: 20px 0;">
+              <p>Your request to join <strong>${club}</strong> as a ${role} has been approved.</p>
+              ${role === 'lead' ? 
+                '<p>You now have access to lead features for this club.</p>' : 
+                '<p>You can now participate in club activities and access club resources.</p>'
+              }
+            </div>
+          </div>
+        `
+      });
+
+    } else {
+      // Send rejection email
+      await transporter.sendMail({
+        from: 'varunreddy2new@gmail.com',
+        to: email,
+        subject: `Update on ${club} Club Request`,
+        html: `
+          <div style="font-family: Arial, sans-serif; padding: 20px; max-width: 600px; margin: 0 auto; background-color: #f9f9f9; border-radius: 10px;">
+            <h2 style="color: #2c3e50; text-align: center;">Club Request Update</h2>
+            <div style="background-color: #ffffff; padding: 20px; border-radius: 8px; margin: 20px 0;">
+              <p>We regret to inform you that your request to join <strong>${club}</strong> as a ${role} was not approved at this time.</p>
+              <p>You may apply again in the future or consider joining other clubs.</p>
+            </div>
+          </div>
+        `
+      });
+    }
+
+    await user.save();
+
+    // Send response HTML
+    res.send(`
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 40px auto; text-align: center; padding: 20px;">
+        <h1 style="color: ${isApproved ? '#28a745' : '#dc3545'}">
+          Request ${isApproved ? 'Approved' : 'Rejected'}
+        </h1>
+        <p>The user has been notified via email.</p>
+        <p style="margin-top: 20px;">You can close this window now.</p>
+      </div>
+    `);
+
+  } catch (error) {
+    console.error('Approval handling error:', error);
+    res.status(500).send('An error occurred while processing the approval');
+  }
+});
+
+// Route to get user's clubs (both selected and pending)
+router.get('/selected-clubs/:email/:role', async (req, res) => {
+  try {
+    const { email, role } = req.params;
+
+    // Find user based on role
+    let user;
+    if (role === 'member') {
+      user = await Member.findOne({ email });
+    } else if (role === 'lead') {
+      user = await Lead.findOne({ email });
+    } else {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid role specified'
+      });
+    }
+
+    if (!user) {
       return res.status(404).json({
         success: false,
-        message: 'Member not found'
+        message: 'User not found'
       });
     }
 
     res.status(200).json({
       success: true,
-      selectedClubs: member.selectedClubs || [],
-      pendingClubs: member.pendingClubs || []
+      selectedClubs: user.selectedClubs || [],
+      pendingClubs: user.pendingClubs || []
     });
 
   } catch (error) {
     console.error('Error fetching clubs:', error);
     res.status(500).json({
       success: false,
-      message: 'Error fetching selected clubs'
+      message: 'Error fetching clubs information'
     });
   }
 });
