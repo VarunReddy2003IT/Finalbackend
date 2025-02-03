@@ -111,18 +111,17 @@ router.post('/select-clubs', async (req, res) => {
     const mailOptions = {
       from: 'varunreddy2new@gmail.com',
       to: adminEmails,
-      subject: `New ${role.charAt(0).toUpperCase() + role.slice(1)} Request for ${selectedClub}`,
+      subject: `New member Request for ${selectedClub}`,
       html: `
         <div style="font-family: Arial, sans-serif; padding: 20px; max-width: 600px; margin: 0 auto; background-color: #f9f9f9; border-radius: 10px;">
           <h2 style="color: #2c3e50; text-align: center; border-bottom: 2px solid #eee; padding-bottom: 10px;">
-            New ${role.charAt(0).toUpperCase() + role.slice(1)} Request
+            New member Request
           </h2>
           
           <div style="background-color: #ffffff; padding: 20px; border-radius: 8px; margin: 20px 0; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
             <h3 style="color: #34495e; margin-bottom: 15px;">User Details:</h3>
             <p style="margin: 5px 0;"><strong>Name:</strong> ${user.name}</p>
             <p style="margin: 5px 0;"><strong>Email:</strong> ${user.email}</p>
-            <p style="margin: 5px 0;"><strong>Role:</strong> ${role}</p>
             ${role === 'member' ? `<p style="margin: 5px 0;"><strong>College ID:</strong> ${user.collegeId}</p>` : ''}
           </div>
           
