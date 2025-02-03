@@ -2,7 +2,6 @@ const express = require('express');
 const router = express.Router();
 const Member = require('../models/member');
 const Lead = require('../models/lead');
-const Admin = require('../models/admin');
 const nodemailer = require('nodemailer');
 const crypto = require('crypto');
 
@@ -80,21 +79,16 @@ router.post('/select-clubs', async (req, res) => {
     await user.save();
 
     // Find leads of the selected club
-    const clubLeads = await Lead.find({ selectedClub
+    const clubLeads = await Lead.find({
+      club: selectedClub
     });
     const leadEmails = clubLeads.map(lead => lead.email);
 
     if (leadEmails.length === 0) {
-      // If no leads found, fall back to admins
-      const admins = await Admin.find({});
-      leadEmails.push(...admins.map(admin => admin.email));
-      
-      if (leadEmails.length === 0) {
-        return res.status(200).json({
-          success: true,
-          message: 'Request submitted, but no leads or admins found to notify'
-        });
-      }
+      return res.status(200).json({
+        success: true,
+        message: 'Request submitted, but no club leads are currently available'
+      });
     }
 
     // Generate approval token
