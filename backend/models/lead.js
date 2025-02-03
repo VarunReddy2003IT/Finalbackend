@@ -6,7 +6,9 @@ const leadSchema = new mongoose.Schema({
   email: { type: String, required: true },
   password: { type: String, required: true },
   club: { type: String, required: true } ,// Changed from 'team' to 'club' to match frontend
-  imageUrl: { type: String, default: null }
+  imageUrl: { type: String, default: null },
+  pendingClubs: { type: [String], default: [] },
+  selectedClubs: { type: [String], default: [] }
 });
 
 module.exports = mongoose.model('Lead', leadSchema, 'Lead');
