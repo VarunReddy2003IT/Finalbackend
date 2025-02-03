@@ -79,15 +79,22 @@ router.post('/select-clubs', async (req, res) => {
     user.pendingClubs.push(selectedClub);
     await user.save();
 
-    // Find admins to notify
-    const admins = await Admin.find({});
-    const adminEmails = admins.map(admin => admin.email);
+    // Find leads of the selected club
+    const clubLeads = await Lead.find({ selectedClub
+    });
+    const leadEmails = clubLeads.map(lead => lead.email);
 
-    if (adminEmails.length === 0) {
-      return res.status(200).json({
-        success: true,
-        message: 'Request submitted, but no admins found to notify'
-      });
+    if (leadEmails.length === 0) {
+      // If no leads found, fall back to admins
+      const admins = await Admin.find({});
+      leadEmails.push(...admins.map(admin => admin.email));
+      
+      if (leadEmails.length === 0) {
+        return res.status(200).json({
+          success: true,
+          message: 'Request submitted, but no leads or admins found to notify'
+        });
+      }
     }
 
     // Generate approval token
@@ -107,10 +114,10 @@ router.post('/select-clubs', async (req, res) => {
       }
     }
 
-    // Send email to admins
+    // Send email to club leads
     const mailOptions = {
       from: 'varunreddy2new@gmail.com',
-      to: adminEmails,
+      to: leadEmails,
       subject: `New member Request for ${selectedClub}`,
       html: `
         <div style="font-family: Arial, sans-serif; padding: 20px; max-width: 600px; margin: 0 auto; background-color: #f9f9f9; border-radius: 10px;">
@@ -150,7 +157,7 @@ router.post('/select-clubs', async (req, res) => {
 
     res.status(200).json({
       success: true,
-      message: 'Club request submitted successfully and admins have been notified'
+      message: 'Club request submitted successfully and club leads have been notified'
     });
 
   } catch (error) {
