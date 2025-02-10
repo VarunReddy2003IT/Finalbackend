@@ -8,7 +8,7 @@ const nodemailer = require('nodemailer');
 
 const router = express.Router();
 
-// Nodemailer setup for sending emails
+// Nodemailer setup
 const transporter = nodemailer.createTransport({
   service: 'gmail',
   auth: {
@@ -19,45 +19,168 @@ const transporter = nodemailer.createTransport({
 
 // List of valid clubs
 const clubs = [
-  'YES','NSS1','NSS2','YouthForSeva','YFS','WeAreForHelp','HOH','Vidyadaan','Rotract'
-  ,'GCCC','IEEE','CSI','AlgoRhythm','OpenForge','VLSID','SEEE','Sports'
+  'YES','NSS1','NSS2','YouthForSeva','YFS','WeAreForHelp','HOH','Vidyadaan','Rotract',
+  'GCCC','IEEE','CSI','AlgoRhythm','OpenForge','VLSID','SEEE','Sports'
 ];
 
-// Signup route for handling user registration requests
-router.post('/', async (req, res) => {
-  try {
-    const { name, collegeId, email, password, role, club } = req.body;
+// In-memory OTP store with Map
+const otpStore = new Map();
 
-    // Basic validation for required fields
-    if (!name || !collegeId || !email || !password || !role) {
+// Helper function to generate 6-digit OTP
+const generateOTP = () => {
+  return Math.floor(100000 + Math.random() * 900000).toString();
+};
+
+// Helper function to validate email format
+const validateEmail = (email) => {
+  const emailRegex = /^[a-zA-Z0-9._%+-]+@gvpce\.ac\.in$/;
+  return emailRegex.test(email);
+};
+
+// Helper function to validate password strength
+const validatePassword = (password) => {
+  const passwordRegex = /^(?=.*[A-Za-z])(?=.*\d)(?=.*[!@#$%^&*]).{8,}$/;
+  return passwordRegex.test(password);
+};
+
+// Helper function to check for existing user
+const checkExistingUser = async (email) => {
+  const existingRequest = await SignupRequest.findOne({ email });
+  const existingAdmin = await Admin.findOne({ email });
+  const existingLead = await Lead.findOne({ email });
+  const existingMember = await Member.findOne({ email });
+  
+  return existingRequest || existingAdmin || existingLead || existingMember;
+};
+
+// Route to send OTP
+router.post('/send-otp', async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    // Validate email format
+    if (!validateEmail(email)) {
+      return res.status(400).json({ 
+        message: 'Please use a valid GVPCE email address' 
+      });
+    }
+
+    // Check for existing user
+    const existingUser = await checkExistingUser(email);
+    if (existingUser) {
+      return res.status(400).json({ 
+        message: 'An account or signup request with this email already exists' 
+      });
+    }
+
+    // Generate and store OTP
+    const otp = generateOTP();
+    otpStore.set(email, {
+      otp,
+      expiry: Date.now() + 5 * 60 * 1000, // 5 minutes expiry
+      attempts: 0
+    });
+
+    // Send OTP email
+    const mailOptions = {
+      from: 'varunreddy2new@gmail.com',
+      to: email,
+      subject: 'GVPCE Club Connect - Email Verification OTP',
+      html: `
+        <div style="font-family: Arial, sans-serif; padding: 20px;">
+          <h2>Email Verification</h2>
+          <p>Your OTP for GVPCE Club Connect signup is: <strong>${otp}</strong></p>
+          <p>This OTP will expire in 5 minutes.</p>
+          <p>If you didn't request this OTP, please ignore this email.</p>
+        </div>
+      `
+    };
+
+    await transporter.sendMail(mailOptions);
+
+    res.status(200).json({ 
+      message: 'OTP sent successfully to your email. Valid for 5 minutes.' 
+    });
+  } catch (error) {
+    console.error('OTP send error:', error);
+    res.status(500).json({ 
+      message: 'Error sending OTP. Please try again later.' 
+    });
+  }
+});
+
+// Route to verify OTP and complete signup
+router.post('/verify', async (req, res) => {
+  try {
+    const { name, collegeId, email, password, role, club, otp } = req.body;
+
+    // Basic validation
+    if (!name || !collegeId || !email || !password || !role || !otp) {
       return res.status(400).json({ message: 'All fields are required' });
     }
 
     // Validate email format
-    const emailRegex = /^[a-zA-Z0-9._%+-]+@gvpce\.ac\.in$/;
-    if (!emailRegex.test(email)) {
-      return res.status(400).json({ message: 'Please use a valid GVPCE email address' });
+    if (!validateEmail(email)) {
+      return res.status(400).json({ 
+        message: 'Please use a valid GVPCE email address' 
+      });
     }
+
+    // Validate password strength
+    if (!validatePassword(password)) {
+      return res.status(400).json({ 
+        message: 'Password must be at least 8 characters long and contain a number and a special character' 
+      });
+    }
+
+    // Verify OTP
+    const otpData = otpStore.get(email);
+    if (!otpData) {
+      return res.status(400).json({ 
+        message: 'No OTP found. Please request a new OTP.' 
+      });
+    }
+
+    if (Date.now() > otpData.expiry) {
+      otpStore.delete(email);
+      return res.status(400).json({ 
+        message: 'OTP has expired. Please request a new OTP.' 
+      });
+    }
+
+    if (otpData.otp !== otp) {
+      otpData.attempts += 1;
+      if (otpData.attempts >= 3) {
+        otpStore.delete(email);
+        return res.status(400).json({ 
+          message: 'Too many incorrect attempts. Please request a new OTP.' 
+        });
+      }
+      return res.status(400).json({ 
+        message: 'Invalid OTP. Please try again.' 
+      });
+    }
+
+    // Remove used OTP
+    otpStore.delete(email);
 
     // Validate club for lead role
     if (role === 'lead') {
       if (!club) {
-        return res.status(400).json({ message: 'Club selection is required for lead role' });
+        return res.status(400).json({ 
+          message: 'Club selection is required for lead role' 
+        });
       }
       if (!clubs.includes(club)) {
         return res.status(400).json({ message: 'Invalid club selection' });
       }
     }
 
-    // Check for existing user or pending request
-    const existingRequest = await SignupRequest.findOne({ email });
-    const existingAdmin = await Admin.findOne({ email });
-    const existingLead = await Lead.findOne({ email });
-    const existingMember = await Member.findOne({ email });
-
-    if (existingRequest || existingAdmin || existingLead || existingMember) {
+    // Check for existing user again
+    const existingUser = await checkExistingUser(email);
+    if (existingUser) {
       return res.status(400).json({ 
-        message: 'An account or signup request with this email already exists' 
+        message: 'An account with this email was created while verifying. Please try with a different email.' 
       });
     }
 
@@ -87,7 +210,7 @@ router.post('/', async (req, res) => {
         });
       }
 
-      // Prepare email content
+      // Send email to admins
       const mailOptions = {
         from: 'varunreddy2new@gmail.com',
         to: adminEmails,
@@ -117,7 +240,7 @@ router.post('/', async (req, res) => {
       await transporter.sendMail(mailOptions);
 
       res.status(200).json({ 
-        message: `${role} signup request submitted. Please wait for admin approval.` 
+        message: `${role} signup request submitted successfully. Please wait for admin approval.` 
       });
     } 
     // Handle member signups
@@ -131,7 +254,7 @@ router.post('/', async (req, res) => {
 
       await newMember.save();
 
-      // Send welcome email to new member
+      // Send welcome email
       const welcomeEmail = {
         from: 'varunreddy2new@gmail.com',
         to: email,
@@ -179,12 +302,10 @@ router.get('/approve/:id', async (req, res) => {
       password: signupRequest.password
     };
 
-    // Add club field for lead role
     if (signupRequest.role === 'lead') {
       userData.club = signupRequest.club;
     }
 
-    // Create or update user based on role
     if (signupRequest.role === 'admin') {
       user = await Admin.findOneAndUpdate(
         { email: signupRequest.email },
@@ -199,7 +320,7 @@ router.get('/approve/:id', async (req, res) => {
       );
     }
 
-    // Send approval email to user
+    // Send approval email
     const approvalEmail = {
       from: 'varunreddy2new@gmail.com',
       to: signupRequest.email,
@@ -216,8 +337,6 @@ router.get('/approve/:id', async (req, res) => {
     };
 
     await transporter.sendMail(approvalEmail);
-
-    // Delete the signup request
     await SignupRequest.findByIdAndDelete(req.params.id);
 
     res.status(200).json({ 
@@ -238,7 +357,7 @@ router.get('/reject/:id', async (req, res) => {
       return res.status(404).json({ message: 'Signup request not found' });
     }
 
-    // Send rejection email to user
+    // Send rejection email
     const rejectionEmail = {
       from: 'varunreddy2new@gmail.com',
       to: signupRequest.email,
@@ -254,8 +373,6 @@ router.get('/reject/:id', async (req, res) => {
     };
 
     await transporter.sendMail(rejectionEmail);
-
-    // Delete the request
     await SignupRequest.findByIdAndDelete(req.params.id);
 
     res.status(200).json({ message: 'Signup request rejected successfully' });
@@ -265,7 +382,7 @@ router.get('/reject/:id', async (req, res) => {
   }
 });
 
-// Route to fetch all pending signup requests
+// Route to fetch pending signup requests
 router.get('/pending', async (req, res) => {
   try {
     const pendingRequests = await SignupRequest.find()
