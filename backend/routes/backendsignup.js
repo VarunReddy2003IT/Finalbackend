@@ -6,84 +6,141 @@ const Member = require('../models/member');
 const SignupRequest = require('../models/signuprequest');
 const nodemailer = require('nodemailer');
 const twilio = require('twilio');
-
 const router = express.Router();
 
-// Twilio setup
+// Environment variables validation
+if (!process.env.TWILIO_ACCOUNT_SID || !process.env.TWILIO_AUTH_TOKEN || !process.env.TWILIO_PHONE_NUMBER) {
+  console.error('Missing required Twilio environment variables');
+  process.exit(1);
+}
+
+// Twilio setup with error handling
 const twilioClient = twilio(
   process.env.TWILIO_ACCOUNT_SID,
   process.env.TWILIO_AUTH_TOKEN
 );
+
 const twilioPhoneNumber = process.env.TWILIO_PHONE_NUMBER;
 
-// Nodemailer setup
+// Nodemailer setup with secure configuration
 const transporter = nodemailer.createTransport({
   service: 'gmail',
   auth: {
-    user: 'varunreddy2new@gmail.com',
-    pass: 'bmly geoo gwkg jasu',
+    user: process.env.EMAIL_USER || 'varunreddy2new@gmail.com',
+    pass: process.env.EMAIL_PASS || 'bmly geoo gwkg jasu'
   },
+  tls: {
+    rejectUnauthorized: false
+  }
 });
 
-// List of valid clubs
+// Verify email configuration
+transporter.verify((error, success) => {
+  if (error) {
+    console.error('Email configuration error:', error);
+    process.exit(1);
+  } else {
+    console.log('Email server is ready to send messages');
+  }
+});
+
+// Valid clubs list
 const clubs = [
-  'YES','NSS1','NSS2','YouthForSeva','YFS','WeAreForHelp','HOH','Vidyadaan','Rotract',
-  'GCCC','IEEE','CSI','AlgoRhythm','OpenForge','VLSID','SEEE','Sports'
+  'YES', 'NSS1', 'NSS2', 'YouthForSeva', 'YFS', 'WeAreForHelp', 'HOH', 
+  'Vidyadaan', 'Rotract', 'GCCC', 'IEEE', 'CSI', 'AlgoRhythm', 
+  'OpenForge', 'VLSID', 'SEEE', 'Sports'
 ];
 
-// In-memory OTP stores
+// In-memory OTP stores with TTL
 const emailOtpStore = new Map();
 const mobileOtpStore = new Map();
 
-// Helper function to generate 6-digit OTP
-const generateOTP = () => {
-  return Math.floor(100000 + Math.random() * 900000).toString();
-};
+// OTP cleanup interval (runs every hour)
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, value] of emailOtpStore.entries()) {
+    if (now > value.expiry) emailOtpStore.delete(key);
+  }
+  for (const [key, value] of mobileOtpStore.entries()) {
+    if (now > value.expiry) mobileOtpStore.delete(key);
+  }
+}, 3600000);
 
-// Helper function to validate email format
+// Helper Functions
+const generateOTP = () => Math.floor(100000 + Math.random() * 900000).toString();
+
 const validateEmail = (email) => {
   const emailRegex = /^[a-zA-Z0-9._%+-]+@gvpce\.ac\.in$/;
   return emailRegex.test(email);
 };
 
-// Helper function to validate mobile number format
 const validateMobileNumber = (mobileNumber) => {
   const mobileRegex = /^[6-9]\d{9}$/;
   return mobileRegex.test(mobileNumber);
 };
 
-// Helper function to validate password strength
 const validatePassword = (password) => {
   const passwordRegex = /^(?=.*[A-Za-z])(?=.*\d)(?=.*[!@#$%^&*]).{8,}$/;
   return passwordRegex.test(password);
 };
 
-// Helper function to check for existing user
 const checkExistingUser = async (email, mobileNumber) => {
-  const queries = [
-    SignupRequest.findOne({ $or: [{ email }, { mobileNumber }] }),
-    Admin.findOne({ $or: [{ email }, { mobileNumber }] }),
-    Lead.findOne({ $or: [{ email }, { mobileNumber }] }),
-    Member.findOne({ $or: [{ email }, { mobileNumber }] })
-  ];
-  
-  const results = await Promise.all(queries);
-  return results.find(result => result !== null);
+  try {
+    const queries = [
+      SignupRequest.findOne({ $or: [{ email }, { mobileNumber }] }),
+      Admin.findOne({ $or: [{ email }, { mobileNumber }] }),
+      Lead.findOne({ $or: [{ email }, { mobileNumber }] }),
+      Member.findOne({ $or: [{ email }, { mobileNumber }] })
+    ];
+    
+    const results = await Promise.all(queries);
+    return results.find(result => result !== null);
+  } catch (error) {
+    console.error('Error checking existing user:', error);
+    throw new Error('Database error while checking existing user');
+  }
+};
+
+const sendEmail = async (options) => {
+  try {
+    await transporter.sendMail(options);
+    console.log(`Email sent successfully to ${options.to}`);
+  } catch (error) {
+    console.error('Email sending error:', error);
+    throw new Error('Failed to send email');
+  }
+};
+
+const sendSMS = async (to, body) => {
+  try {
+    await twilioClient.messages.create({
+      body,
+      from: twilioPhoneNumber,
+      to: `+91${to}`
+    });
+    console.log(`SMS sent successfully to ${to}`);
+  } catch (error) {
+    console.error('SMS sending error:', error);
+    throw new Error('Failed to send SMS');
+  }
 };
 
 // Route to send email OTP
 router.post('/send-otp', async (req, res) => {
+  console.log('Received email OTP request:', req.body);
   try {
     const { email } = req.body;
 
-    // Validate email format
+    if (!email) {
+      return res.status(400).json({ message: 'Email is required' });
+    }
+
     if (!validateEmail(email)) {
       return res.status(400).json({ 
         message: 'Please use a valid GVPCE email address' 
       });
     }
 
-    // Check for existing user
     const existingUser = await checkExistingUser(email);
     if (existingUser) {
       return res.status(400).json({ 
@@ -91,17 +148,15 @@ router.post('/send-otp', async (req, res) => {
       });
     }
 
-    // Generate and store OTP
     const otp = generateOTP();
     emailOtpStore.set(email, {
       otp,
-      expiry: Date.now() + 5 * 60 * 1000, // 5 minutes expiry
+      expiry: Date.now() + 5 * 60 * 1000,
       attempts: 0
     });
 
-    // Send OTP email
-    const mailOptions = {
-      from: 'varunreddy2new@gmail.com',
+    await sendEmail({
+      from: process.env.EMAIL_USER || 'varunreddy2new@gmail.com',
       to: email,
       subject: 'GVPCE Club Connect - Email Verification OTP',
       html: `
@@ -112,9 +167,7 @@ router.post('/send-otp', async (req, res) => {
           <p>If you didn't request this OTP, please ignore this email.</p>
         </div>
       `
-    };
-
-    await transporter.sendMail(mailOptions);
+    });
 
     res.status(200).json({ 
       message: 'OTP sent successfully to your email. Valid for 5 minutes.' 
@@ -129,17 +182,20 @@ router.post('/send-otp', async (req, res) => {
 
 // Route to send mobile OTP
 router.post('/send-mobile-otp', async (req, res) => {
+  console.log('Received mobile OTP request:', req.body);
   try {
     const { mobileNumber } = req.body;
 
-    // Validate mobile number format
+    if (!mobileNumber) {
+      return res.status(400).json({ message: 'Mobile number is required' });
+    }
+
     if (!validateMobileNumber(mobileNumber)) {
       return res.status(400).json({ 
         message: 'Please enter a valid 10-digit Indian mobile number' 
       });
     }
 
-    // Check for existing user
     const existingUser = await checkExistingUser(null, mobileNumber);
     if (existingUser) {
       return res.status(400).json({ 
@@ -147,20 +203,17 @@ router.post('/send-mobile-otp', async (req, res) => {
       });
     }
 
-    // Generate and store OTP
     const otp = generateOTP();
     mobileOtpStore.set(mobileNumber, {
       otp,
-      expiry: Date.now() + 5 * 60 * 1000, // 5 minutes expiry
+      expiry: Date.now() + 5 * 60 * 1000,
       attempts: 0
     });
 
-    // Send OTP via Twilio
-    await twilioClient.messages.create({
-      body: `Your GVPCE Club Connect mobile verification OTP is: ${otp}. Valid for 5 minutes.`,
-      from: twilioPhoneNumber,
-      to: `+91${mobileNumber}`
-    });
+    await sendSMS(
+      mobileNumber,
+      `Your GVPCE Club Connect mobile verification OTP is: ${otp}. Valid for 5 minutes.`
+    );
 
     res.status(200).json({ 
       message: 'OTP sent successfully to your mobile number. Valid for 5 minutes.' 
@@ -175,6 +228,7 @@ router.post('/send-mobile-otp', async (req, res) => {
 
 // Route to verify OTPs and complete signup
 router.post('/verify', async (req, res) => {
+  console.log('Received verify request:', { ...req.body, password: '[REDACTED]' });
   try {
     const { 
       name, collegeId, email, mobileNumber, password, 
@@ -187,21 +241,19 @@ router.post('/verify', async (req, res) => {
       return res.status(400).json({ message: 'All fields are required' });
     }
 
-    // Validate email format
+    // Extended validation
     if (!validateEmail(email)) {
       return res.status(400).json({ 
         message: 'Please use a valid GVPCE email address' 
       });
     }
 
-    // Validate mobile number format
     if (!validateMobileNumber(mobileNumber)) {
       return res.status(400).json({ 
         message: 'Please enter a valid 10-digit Indian mobile number' 
       });
     }
 
-    // Validate password strength
     if (!validatePassword(password)) {
       return res.status(400).json({ 
         message: 'Password must be at least 8 characters long and contain a number and a special character' 
@@ -210,14 +262,7 @@ router.post('/verify', async (req, res) => {
 
     // Verify email OTP
     const emailOtpData = emailOtpStore.get(email);
-    if (!emailOtpData) {
-      return res.status(400).json({ 
-        message: 'Email OTP not found. Please request a new OTP.' 
-      });
-    }
-
-    if (Date.now() > emailOtpData.expiry) {
-      emailOtpStore.delete(email);
+    if (!emailOtpData || Date.now() > emailOtpData.expiry) {
       return res.status(400).json({ 
         message: 'Email OTP has expired. Please request a new OTP.' 
       });
@@ -238,14 +283,7 @@ router.post('/verify', async (req, res) => {
 
     // Verify mobile OTP
     const mobileOtpData = mobileOtpStore.get(mobileNumber);
-    if (!mobileOtpData) {
-      return res.status(400).json({ 
-        message: 'Mobile OTP not found. Please request a new OTP.' 
-      });
-    }
-
-    if (Date.now() > mobileOtpData.expiry) {
-      mobileOtpStore.delete(mobileNumber);
+    if (!mobileOtpData || Date.now() > mobileOtpData.expiry) {
       return res.status(400).json({ 
         message: 'Mobile OTP has expired. Please request a new OTP.' 
       });
@@ -264,34 +302,31 @@ router.post('/verify', async (req, res) => {
       });
     }
 
-    // Remove used OTPs
+    // Clear used OTPs
     emailOtpStore.delete(email);
     mobileOtpStore.delete(mobileNumber);
 
     // Validate club for lead role
     if (role === 'lead') {
-      if (!club) {
+      if (!club || !clubs.includes(club)) {
         return res.status(400).json({ 
-          message: 'Club selection is required for lead role' 
+          message: 'Invalid club selection' 
         });
-      }
-      if (!clubs.includes(club)) {
-        return res.status(400).json({ message: 'Invalid club selection' });
       }
     }
 
-    // Check for existing user again
+    // Final existing user check
     const existingUser = await checkExistingUser(email, mobileNumber);
     if (existingUser) {
       return res.status(400).json({ 
-        message: 'An account with this email or mobile number was created while verifying. Please try again with different credentials.' 
+        message: 'An account with these credentials was created while verifying. Please try again with different credentials.' 
       });
     }
 
-    // Hash the password
+    // Hash password
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // Handle admin and lead signups
+    // Handle different role signups
     if (role === 'admin' || role === 'lead') {
       const newRequest = new SignupRequest({
         name,
@@ -306,7 +341,7 @@ router.post('/verify', async (req, res) => {
       await newRequest.save();
 
       // Fetch admin emails
-      const admins = await Admin.find({});
+      const admins = await Admin.find({}, 'email');
       const adminEmails = admins.map(admin => admin.email);
 
       if (adminEmails.length === 0) {
@@ -316,10 +351,10 @@ router.post('/verify', async (req, res) => {
       }
 
       // Send email to admins
-      const mailOptions = {
-        from: 'varunreddy2new@gmail.com',
+      await sendEmail({
+        from: process.env.EMAIL_USER || 'varunreddy2new@gmail.com',
         to: adminEmails,
-        subject: `GVPCE Club Connect Signup Request for ${role}`,
+        subject: `GVPCE Club Connect - New ${role} Signup Request`,
         html: `
           <div style="font-family: Arial, sans-serif; padding: 20px;">
             <h2>New Signup Request</h2>
@@ -330,26 +365,24 @@ router.post('/verify', async (req, res) => {
             ${role === 'lead' ? `<p><strong>Club:</strong> ${club}</p>` : ''}
             <p><strong>College ID:</strong> ${collegeId}</p>
             <div style="margin-top: 20px;">
-              <a href="https://finalbackend-8.onrender.com/api/signup/approve/${newRequest._id}" 
+              <a href="${process.env.BACKEND_URL}/api/signup/approve/${newRequest._id}" 
                  style="background-color: #4CAF50; color: white; padding: 10px 20px; text-decoration: none; margin-right: 10px; border-radius: 5px;">
                 Approve
               </a>
-              <a href="https://finalbackend-8.onrender.com/api/signup/reject/${newRequest._id}" 
+              <a href="${process.env.BACKEND_URL}/api/signup/reject/${newRequest._id}" 
                  style="background-color: #f44336; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">
                 Reject
               </a>
             </div>
           </div>
         `
-      };
-
-      await transporter.sendMail(mailOptions);
+      });
 
       res.status(200).json({ 
         message: `${role} signup request submitted successfully. Please wait for admin approval.` 
       });
     } 
-    // Handle member signups
+    // Handle member signup
     else if (role === 'member') {
       const newMember = new Member({
         name,
@@ -362,8 +395,8 @@ router.post('/verify', async (req, res) => {
       await newMember.save();
 
       // Send welcome email
-      const welcomeEmail = {
-        from: 'varunreddy2new@gmail.com',
+      await sendEmail({
+        from: process.env.EMAIL_USER || 'varunreddy2new@gmail.com',
         to: email,
         subject: 'Welcome to GVPCE Club Connect!',
         html: `
@@ -375,9 +408,13 @@ router.post('/verify', async (req, res) => {
             <p>Thank you for joining!</p>
           </div>
         `
-      };
+      });
 
-      await transporter.sendMail(welcomeEmail);
+      // Send welcome SMS
+      await sendSMS(
+        mobileNumber,
+        `Welcome to GVPCE Club Connect! Your member account has been created successfully. You can now log in with your email and password.`
+      );
 
       res.status(200).json({ message: 'Member account created successfully' });
     } 
@@ -391,8 +428,8 @@ router.post('/verify', async (req, res) => {
     });
   }
 });
-// Continuing from previous route file...
 
+// Route to approve signup request
 router.get('/approve/:id', async (req, res) => {
   try {
     const signupRequest = await SignupRequest.findById(req.params.id);
@@ -401,59 +438,48 @@ router.get('/approve/:id', async (req, res) => {
       return res.status(404).json({ message: 'Signup request not found' });
     }
 
-    let user = null;
     const userData = {
       name: signupRequest.name,
       collegeId: signupRequest.collegeId,
       email: signupRequest.email,
       mobileNumber: signupRequest.mobileNumber,
-      password: signupRequest.password
+      password: signupRequest.password,
+      ...(signupRequest.role === 'lead' && { club: signupRequest.club })
     };
 
-    if (signupRequest.role === 'lead') {
-      userData.club = signupRequest.club;
-    }
+    let user;
+    const ModelClass = signupRequest.role === 'admin' ? Admin : Lead;
+    
+    user = await ModelClass.findOneAndUpdate(
+      { email: signupRequest.email },
+      { $set: userData },
+      { new: true, upsert: true }
+    );
 
-    if (signupRequest.role === 'admin') {
-      user = await Admin.findOneAndUpdate(
-        { email: signupRequest.email },
-        { $set: userData },
-        { new: true, upsert: true }
-      );
-    } else if (signupRequest.role === 'lead') {
-      user = await Lead.findOneAndUpdate(
-        { email: signupRequest.email },
-        { $set: userData },
-        { new: true, upsert: true }
-      );
-    }
+    // Send approval notifications
+    await Promise.all([
+      sendEmail({
+        from: process.env.EMAIL_USER || 'varunreddy2new@gmail.com',
+        to: signupRequest.email,
+        subject: 'GVPCE Club Connect - Account Approved!',
+        html: `
+          <div style="font-family: Arial, sans-serif; padding: 20px;">
+            <h2>Account Approved!</h2>
+            <p>Dear ${signupRequest.name},</p>
+            <p>Your account request has been approved. You can now log in to access the platform.</p>
+            <p>Role: ${signupRequest.role}</p>
+            ${signupRequest.role === 'lead' ? `<p>Club: ${signupRequest.club}</p>` : ''}
+            <p>Email: ${signupRequest.email}</p>
+            <p>Mobile: ${signupRequest.mobileNumber}</p>
+          </div>
+        `
+      }),
+      sendSMS(
+        signupRequest.mobileNumber,
+        `Your GVPCE Club Connect account has been approved! You can now log in with your email and password.`
+      )
+    ]);
 
-    // Send approval email
-    const approvalEmail = {
-      from: 'varunreddy2new@gmail.com',
-      to: signupRequest.email,
-      subject: 'GVPCE Club Connect - Account Approved!',
-      html: `
-        <div style="font-family: Arial, sans-serif; padding: 20px;">
-          <h2>Account Approved!</h2>
-          <p>Dear ${signupRequest.name},</p>
-          <p>Your account request has been approved. You can now log in to access the platform.</p>
-          <p>Role: ${signupRequest.role}</p>
-          ${signupRequest.role === 'lead' ? `<p>Club: ${signupRequest.club}</p>` : ''}
-          <p>Email: ${signupRequest.email}</p>
-          <p>Mobile: ${signupRequest.mobileNumber}</p>
-        </div>
-      `
-    };
-
-    // Send SMS notification
-    await twilioClient.messages.create({
-      body: `Your GVPCE Club Connect account has been approved! You can now log in with your email and password.`,
-      from: twilioPhoneNumber,
-      to: `+91${signupRequest.mobileNumber}`
-    });
-
-    await transporter.sendMail(approvalEmail);
     await SignupRequest.findByIdAndDelete(req.params.id);
 
     res.status(200).json({ 
@@ -465,7 +491,7 @@ router.get('/approve/:id', async (req, res) => {
   }
 });
 
-// Route to reject a signup request
+// Route to reject signup request
 router.get('/reject/:id', async (req, res) => {
   try {
     const signupRequest = await SignupRequest.findById(req.params.id);
@@ -474,30 +500,27 @@ router.get('/reject/:id', async (req, res) => {
       return res.status(404).json({ message: 'Signup request not found' });
     }
 
-    // Send rejection email
-    const rejectionEmail = {
-      from: 'varunreddy2new@gmail.com',
-      to: signupRequest.email,
-      subject: 'GVPCE Club Connect - Account Request Status',
-      html: `
-        <div style="font-family: Arial, sans-serif; padding: 20px;">
-          <h2>Account Request Update</h2>
-          <p>Dear ${signupRequest.name},</p>
-          <p>We regret to inform you that your account request has been declined.</p>
-          <p>If you believe this was a mistake, please try signing up again or contact support.</p>
-        </div>
-      `
-    };
-
-    // Send SMS notification
-    await twilioClient.messages.create({
-      body: `Your GVPCE Club Connect account request has been declined. If you believe this was a mistake, please try signing up again or contact support.`,
-      from: twilioPhoneNumber,
-      to: `+91${signupRequest.mobileNumber}`
-    });
-
-    await transporter.sendMail(rejectionEmail);
-    await SignupRequest.findByIdAndDelete(req.params.id);
+    // Send rejection notifications
+    await Promise.all([
+      sendEmail({
+        from: process.env.EMAIL_USER || 'varunreddy2new@gmail.com',
+        to: signupRequest.email,
+        subject: 'GVPCE Club Connect - Account Request Status',
+        html: `
+          <div style="font-family: Arial, sans-serif; padding: 20px;">
+            <h2>Account Request Update</h2>
+            <p>Dear ${signupRequest.name},</p>
+            <p>We regret to inform you that your account request has been declined.</p>
+            <p>If you believe this was a mistake, please try signing up again or contact support.</p>
+          </div>
+        `
+      }),
+      sendSMS(
+        signupRequest.mobileNumber,
+        `Your GVPCE Club Connect account request has been declined. If you believe this was a mistake, please try signing up again or contact support.`
+      ),
+      SignupRequest.findByIdAndDelete(req.params.id)
+    ]);
 
     res.status(200).json({ message: 'Signup request rejected successfully' });
   } catch (error) {
@@ -506,7 +529,7 @@ router.get('/reject/:id', async (req, res) => {
   }
 });
 
-// Route to fetch pending signup requests
+// Additional utility routes
 router.get('/pending', async (req, res) => {
   try {
     const pendingRequests = await SignupRequest.find()
@@ -519,7 +542,6 @@ router.get('/pending', async (req, res) => {
   }
 });
 
-// Route to validate mobile number format
 router.post('/validate-mobile', async (req, res) => {
   try {
     const { mobileNumber } = req.body;
@@ -552,19 +574,15 @@ router.post('/validate-mobile', async (req, res) => {
   }
 });
 
-// Route to resend OTP (both email and mobile)
 router.post('/resend-otp', async (req, res) => {
   try {
     const { type, email, mobileNumber } = req.body;
 
     if (type === 'email') {
       if (!email || !validateEmail(email)) {
-        return res.status(400).json({ 
-          message: 'Please provide a valid email address' 
-        });
+        return res.status(400).json({ message: 'Please provide a valid email address' });
       }
 
-      // Generate and store new email OTP
       const otp = generateOTP();
       emailOtpStore.set(email, {
         otp,
@@ -572,9 +590,8 @@ router.post('/resend-otp', async (req, res) => {
         attempts: 0
       });
 
-      // Send new email OTP
-      const mailOptions = {
-        from: 'varunreddy2new@gmail.com',
+      await sendEmail({
+        from: process.env.EMAIL_USER || 'varunreddy2new@gmail.com',
         to: email,
         subject: 'GVPCE Club Connect - New Email Verification OTP',
         html: `
@@ -584,17 +601,12 @@ router.post('/resend-otp', async (req, res) => {
             <p>This OTP will expire in 5 minutes.</p>
           </div>
         `
-      };
-
-      await transporter.sendMail(mailOptions);
+      });
     } else if (type === 'mobile') {
       if (!mobileNumber || !validateMobileNumber(mobileNumber)) {
-        return res.status(400).json({ 
-          message: 'Please provide a valid mobile number' 
-        });
+        return res.status(400).json({ message: 'Please provide a valid mobile number' });
       }
 
-      // Generate and store new mobile OTP
       const otp = generateOTP();
       mobileOtpStore.set(mobileNumber, {
         otp,
@@ -602,26 +614,18 @@ router.post('/resend-otp', async (req, res) => {
         attempts: 0
       });
 
-      // Send new mobile OTP
-      await twilioClient.messages.create({
-        body: `Your new GVPCE Club Connect mobile verification OTP is: ${otp}. Valid for 5 minutes.`,
-        from: twilioPhoneNumber,
-        to: `+91${mobileNumber}`
-      });
+      await sendSMS(
+        mobileNumber,
+        `Your new GVPCE Club Connect mobile verification OTP is: ${otp}. Valid for 5 minutes.`
+      );
     } else {
-      return res.status(400).json({ 
-        message: 'Invalid OTP type specified' 
-      });
+      return res.status(400).json({ message: 'Invalid OTP type specified' });
     }
 
-    res.status(200).json({ 
-      message: `New OTP sent successfully to your ${type}` 
-    });
+    res.status(200).json({ message: `New OTP sent successfully to your ${type}` });
   } catch (error) {
     console.error('Resend OTP error:', error);
-    res.status(500).json({ 
-      message: `Error resending OTP to ${type}` 
-    });
+    res.status(500).json({ message: `Error resending OTP to ${type}` });
   }
 });
 
