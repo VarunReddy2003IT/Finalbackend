@@ -5,7 +5,7 @@ const Admin = require('../models/admin');
 // Fetch notifications for the logged-in admin
 router.get('/', async (req, res) => {
   try {
-    const admin = await Admin.findById(req.adminId); // Assuming you're using JWT for authentication
+    const admin = await Admin.find(req.email); // Assuming you're using JWT for authentication
     res.json({
       notifications: admin.notifications,
       unreadNotifications: admin.unreadNotifications,
