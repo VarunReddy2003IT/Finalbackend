@@ -96,14 +96,18 @@ router.get('/members-by-club', async (req, res) => {
     }
 
     try {
-        // Find members whose selectedClubs array contains the clubName
-        const members = await Member.find({
-            selectedClubs: clubName
-        });
+        // Run both queries in parallel
+        const [members, leads] = await Promise.all([
+            Member.find({ selectedClubs: clubName }),
+            Lead.find({ selectedClubs: clubName })
+        ]);
+
+        // Merge both collections
+        const allMembers = [...members, ...leads];
 
         res.json({
             success: true,
-            data: members
+            data: allMembers
         });
     } catch (error) {
         console.error('Error fetching members by club:', error);
@@ -113,6 +117,7 @@ router.get('/members-by-club', async (req, res) => {
         });
     }
 });
+
 
 // Remove a club from a member's selectedClubs array
 router.put('/remove-club', async (req, res) => {
