@@ -173,7 +173,7 @@ router.post('/verify', async (req, res) => {
     // Check for existing user
     const existingUser = await checkExistingUser(email);
     if (existingUser) {
-      return res.status(400).json({ message: 'An account with this email or mobile number was created while verifying. Please try with different credentials.' });
+      return res.status(400).json({ message: 'An account with this email or mobile number already exists' });
     }
 
     // Hash the password
@@ -193,23 +193,39 @@ router.post('/verify', async (req, res) => {
 
       await newRequest.save();
 
-      // Fetch admin emails
-      const admins = await Admin.find({});
-      const adminEmails = admins.map(admin => admin.email);
+      // Fetch admins and check if any have notifications
+      const admins = await Admin.find({ notifications: { $exists: true, $not: { $size: 0 } } });
 
-      if (adminEmails.length === 0) {
-        return res.status(500).json({ message: 'No admins found in the system to approve your request' });
+      if (admins.length > 0) {
+        // If there are admins with notifications, add the signup request to their notifications
+        for (let admin of admins) {
+          const notification = {
+            type: 'SIGNUP_REQUEST',
+            title: `New ${role} Signup Request`,
+            message: `A new ${role} signup request for ${name} has been made. Please review it.`,
+            requestData: { name, email, mobilenumber, collegeId, role, club: role === 'lead' ? club : undefined }
+          };
+          await admin.addNotification(notification);
+        }
+
+        return res.status(200).json({ message: `${role} signup request submitted successfully. Please wait for admin approval.` });
+      } else {
+        // If no admins have notifications, send an email to all admins
+        const adminEmails = admins.map(admin => admin.email);
+
+        if (adminEmails.length === 0) {
+          return res.status(500).json({ message: 'No admins found in the system to approve your request' });
+        }
+
+        await transporter.sendMail({
+          from: 'varunreddy2new@gmail.com',
+          to: adminEmails,
+          subject: `GVPCE Club Connect Signup Request for ${role}`,
+          html: `<div><h2>New Signup Request</h2><p><strong>Name:</strong> ${name}</p><p><strong>Email:</strong> ${email}</p><p><strong>Mobile:</strong> ${mobilenumber}</p><p><strong>Role:</strong> ${role}</p>${role === 'lead' ? `<p><strong>Club:</strong> ${club}</p>` : ''}<p><strong>College ID:</strong> ${collegeId}</p><div><a href="https://finalbackend-8.onrender.com/api/signup/approve/${newRequest._id}">Approve</a><a href="https://finalbackend-8.onrender.com/api/signup/reject/${newRequest._id}">Reject</a></div></div>`
+        });
+
+        return res.status(200).json({ message: `${role} signup request submitted successfully. Please wait for admin approval.` });
       }
-
-      // Send email to admins
-      await transporter.sendMail({
-        from: 'varunreddy2new@gmail.com',
-        to: adminEmails,
-        subject: `GVPCE Club Connect Signup Request for ${role}`,
-        html: `<div><h2>New Signup Request</h2><p><strong>Name:</strong> ${name}</p><p><strong>Email:</strong> ${email}</p><p><strong>Mobile:</strong> ${mobilenumber}</p><p><strong>Role:</strong> ${role}</p>${role === 'lead' ? `<p><strong>Club:</strong> ${club}</p>` : ''}<p><strong>College ID:</strong> ${collegeId}</p><div><a href="https://finalbackend-8.onrender.com/api/signup/approve/${newRequest._id}">Approve</a><a href="https://finalbackend-8.onrender.com/api/signup/reject/${newRequest._id}">Reject</a></div></div>`
-      });
-
-      return res.status(200).json({ message: `${role} signup request submitted successfully. Please wait for admin approval.` });
     }
 
     // Handle member signups
