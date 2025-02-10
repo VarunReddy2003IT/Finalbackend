@@ -127,7 +127,7 @@ const sendEmail = async (options) => {
 const sendSMS = async (to, body) => {
   try {
     const response = await axios.post(
-      'https://messagingapi.sinch.com/v1/sms', 
+      'https://us.sms.api.sinch.com/xms/v1', 
       {
         from: sinchPhoneNumber,
         to: to,
