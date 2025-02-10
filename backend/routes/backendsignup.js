@@ -227,7 +227,7 @@ router.post('/send-mobile-otp', async (req, res) => {
     });
 
     await sendSMS(
-      `+91${mobileNumber}`,
+      mobileNumber,
       `Your GVPCE Club Connect mobile verification OTP is: ${otp}. Valid for 5 minutes.`
     );
 
