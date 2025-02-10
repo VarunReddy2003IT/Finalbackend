@@ -290,6 +290,32 @@ router.get('/approve/:id', async (req, res) => {
       );
     }
 
+    if (!user) {
+      return res.status(500).json({ message: 'Error creating user account' });
+    }
+
+    // Create notification
+    const notification = {
+      type: 'SIGNUP_REQUEST',
+      title: 'Account Approved',
+      message: `Your ${signupRequest.role} account has been approved!`,
+      requestData: {
+        requestId: signupRequest._id,
+        name: signupRequest.name,
+        email: signupRequest.email,
+        role: signupRequest.role,
+        club: signupRequest.club,
+        collegeId: signupRequest.collegeId,
+        mobilenumber: signupRequest.mobilenumber
+      },
+      read: false,
+      createdAt: new Date()
+    };
+
+    if (signupRequest.role === 'admin') {
+      await user.addNotification(notification);
+    }
+
     // Send approval email
     const approvalEmail = {
       from: 'varunreddy2new@gmail.com',
@@ -317,6 +343,7 @@ router.get('/approve/:id', async (req, res) => {
     res.status(500).json({ message: 'Error approving signup request' });
   }
 });
+
 
 // Route to reject a signup request
 router.get('/reject/:id', async (req, res) => {
