@@ -4,8 +4,18 @@ const Admin = require('../models/admin');
 
 // Fetch notifications for the logged-in admin
 router.get('/', async (req, res) => {
+  const { email } = req.query; // Assuming email is passed as a query parameter
+
+  if (!email) {
+    return res.status(400).json({ message: 'Email is required' });
+  }
+
   try {
-    const admin = await Admin.find(req.email); // Assuming you're using JWT for authentication
+    const admin = await Admin.findOne({ email: email }); // Find admin by email
+    if (!admin) {
+      return res.status(404).json({ message: 'Admin not found' });
+    }
+
     res.json({
       notifications: admin.notifications,
       unreadNotifications: admin.unreadNotifications,
@@ -17,10 +27,19 @@ router.get('/', async (req, res) => {
 
 // Mark notification as read
 router.put('/read/:id', async (req, res) => {
-  try {
-    const admin = await Admin.findById(req.adminId);
-    const notification = admin.notifications.id(req.params.id);
+  const { email } = req.query; // Assuming email is passed as a query parameter
 
+  if (!email) {
+    return res.status(400).json({ message: 'Email is required' });
+  }
+
+  try {
+    const admin = await Admin.findOne({ email: email }); // Find admin by email
+    if (!admin) {
+      return res.status(404).json({ message: 'Admin not found' });
+    }
+
+    const notification = admin.notifications.id(req.params.id);
     if (notification && !notification.read) {
       notification.read = true;
       admin.unreadNotifications = Math.max(0, admin.unreadNotifications - 1);
