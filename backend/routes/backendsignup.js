@@ -51,18 +51,10 @@ const validatePassword = (password) => {
 
 // Helper function to check for existing user
 const checkExistingUser = async (email, mobileNumber) => {
-  const existingRequest = await SignupRequest.findOne({ 
-    $or: [{ email }, { mobileNumber }] 
-  });
-  const existingAdmin = await Admin.findOne({ 
-    $or: [{ email }, { mobileNumber }] 
-  });
-  const existingLead = await Lead.findOne({ 
-    $or: [{ email }, { mobileNumber }] 
-  });
-  const existingMember = await Member.findOne({ 
-    $or: [{ email }, { mobileNumber }] 
-  });
+  const existingRequest = await SignupRequest.findOne({ email });
+  const existingAdmin = await Admin.findOne({ email });
+  const existingLead = await Lead.findOne({ email });
+  const existingMember = await Member.findOne({ email });
   
   return existingRequest || existingAdmin || existingLead || existingMember;
 };
