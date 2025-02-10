@@ -50,7 +50,7 @@ const validatePassword = (password) => {
 };
 
 // Helper function to check for existing user
-const checkExistingUser = async (email, mobileNumber) => {
+const checkExistingUser = async (email) => {
   const existingRequest = await SignupRequest.findOne({ email });
   const existingAdmin = await Admin.findOne({ email });
   const existingLead = await Lead.findOne({ email });
@@ -171,7 +171,7 @@ router.post('/verify', async (req, res) => {
     }
 
     // Check for existing user
-    const existingUser = await checkExistingUser(email, mobileNumber);
+    const existingUser = await checkExistingUser(email);
     if (existingUser) {
       return res.status(400).json({ message: 'An account with this email or mobile number was created while verifying. Please try with different credentials.' });
     }
