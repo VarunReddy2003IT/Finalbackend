@@ -38,9 +38,9 @@ const validateEmail = (email) => {
 };
 
 // Helper function to validate mobile number
-const validateMobileNumber = (mobileNumber) => {
+const validatemobilenumber = (mobilenumber) => {
   const mobileRegex = /^[6-9]\d{9}$/;
-  return mobileRegex.test(mobileNumber);
+  return mobileRegex.test(mobilenumber);
 };
 
 // Helper function to validate password strength
@@ -118,12 +118,12 @@ router.post('/send-otp', async (req, res) => {
 // Route to verify OTP and complete signup
 router.post('/verify', async (req, res) => {
   try {
-    const { name, collegeId, email, mobileNumber, password, role, club, otp } = req.body;
+    const { name, collegeId, email, mobilenumber, password, role, club, otp } = req.body;
 
     console.log("Received Data:", req.body); // Debugging log
 
     // Basic validation
-    if ([name, collegeId, email, mobileNumber, password, role, otp].some(field => !field?.trim())) {
+    if ([name, collegeId, email, mobilenumber, password, role, otp].some(field => !field?.trim())) {
       return res.status(400).json({ message: 'All fields are required' });
     }
 
@@ -133,7 +133,7 @@ router.post('/verify', async (req, res) => {
     }
 
     // Validate mobile number
-    if (!validateMobileNumber(mobileNumber)) {
+    if (!validatemobilenumber(mobilenumber)) {
       return res.status(400).json({ message: 'Please enter a valid 10-digit Indian mobile number' });
     }
 
@@ -185,7 +185,7 @@ router.post('/verify', async (req, res) => {
         name,
         collegeId,
         email,
-        mobileNumber,
+        mobilenumber,
         role,
         password: hashedPassword,
         club: role === 'lead' ? club : undefined
@@ -206,7 +206,7 @@ router.post('/verify', async (req, res) => {
         from: 'varunreddy2new@gmail.com',
         to: adminEmails,
         subject: `GVPCE Club Connect Signup Request for ${role}`,
-        html: `<div><h2>New Signup Request</h2><p><strong>Name:</strong> ${name}</p><p><strong>Email:</strong> ${email}</p><p><strong>Mobile:</strong> ${mobileNumber}</p><p><strong>Role:</strong> ${role}</p>${role === 'lead' ? `<p><strong>Club:</strong> ${club}</p>` : ''}<p><strong>College ID:</strong> ${collegeId}</p><div><a href="https://finalbackend-8.onrender.com/api/signup/approve/${newRequest._id}">Approve</a><a href="https://finalbackend-8.onrender.com/api/signup/reject/${newRequest._id}">Reject</a></div></div>`
+        html: `<div><h2>New Signup Request</h2><p><strong>Name:</strong> ${name}</p><p><strong>Email:</strong> ${email}</p><p><strong>Mobile:</strong> ${mobilenumber}</p><p><strong>Role:</strong> ${role}</p>${role === 'lead' ? `<p><strong>Club:</strong> ${club}</p>` : ''}<p><strong>College ID:</strong> ${collegeId}</p><div><a href="https://finalbackend-8.onrender.com/api/signup/approve/${newRequest._id}">Approve</a><a href="https://finalbackend-8.onrender.com/api/signup/reject/${newRequest._id}">Reject</a></div></div>`
       });
 
       return res.status(200).json({ message: `${role} signup request submitted successfully. Please wait for admin approval.` });
@@ -217,7 +217,7 @@ router.post('/verify', async (req, res) => {
       name,
       collegeId,
       email,
-      mobileNumber,
+      mobilenumber,
       password: hashedPassword
     });
 
@@ -252,7 +252,7 @@ router.get('/approve/:id', async (req, res) => {
       name: signupRequest.name,
       collegeId: signupRequest.collegeId,
       email: signupRequest.email,
-      mobilenumber: signupRequest.mobileNumber,
+      mobilenumber: signupRequest.mobilenumber,
       password: signupRequest.password
     };
 
@@ -351,7 +351,7 @@ router.get('/pending', async (req, res) => {
 // Route to check if email or mobile exists
 router.post('/check-exists', async (req, res) => {
   try {
-    const { email, mobileNumber } = req.body;
+    const { email, mobilenumber } = req.body;
 
     const existingUser = await checkExistingUser(email);
     
@@ -359,7 +359,7 @@ router.post('/check-exists', async (req, res) => {
       // Determine which field(s) caused the conflict
       const conflicts = [];
       if (existingUser.email === email) conflicts.push('email');
-      if (existingUser.mobileNumber === mobileNumber) conflicts.push('mobile number');
+      if (existingUser.mobilenumber === mobilenumber) conflicts.push('mobile number');
       
       return res.status(400).json({
         exists: true,
