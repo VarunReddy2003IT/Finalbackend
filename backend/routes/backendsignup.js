@@ -252,7 +252,7 @@ router.get('/approve/:id', async (req, res) => {
       name: signupRequest.name,
       collegeId: signupRequest.collegeId,
       email: signupRequest.email,
-      mobileNumber: signupRequest.mobileNumber,
+      mobileNumber: signupRequest.mobilenumber,
       password: signupRequest.password
     };
 
