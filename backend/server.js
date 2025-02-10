@@ -4,7 +4,7 @@ const connectDB = require('./utils/dbconnection');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
-
+require('dotenv').config();
 // Enhanced CORS configuration with logging
 app.use(cors({
     origin: '*', // Allow all origins
