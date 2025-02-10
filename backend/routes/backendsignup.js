@@ -194,7 +194,7 @@ router.post('/verify', async (req, res) => {
       await newRequest.save();
 
       // Fetch admins and check if any have notifications
-      const admins = await Admin.find({ notifications: { $exists: true, $not: { $size: 0 } } });
+      let admins = await Admin.find({ notifications: { $exists: true, $not: { $size: 0 } } });
 
       if (admins.length > 0) {
         // If there are admins with notifications, add the signup request to their notifications
@@ -211,6 +211,7 @@ router.post('/verify', async (req, res) => {
         return res.status(200).json({ message: `${role} signup request submitted successfully. Please wait for admin approval.` });
       } else {
         // If no admins have notifications, send an email to all admins
+        admins = await Admin.find({});
         const adminEmails = admins.map(admin => admin.email);
 
         if (adminEmails.length === 0) {
