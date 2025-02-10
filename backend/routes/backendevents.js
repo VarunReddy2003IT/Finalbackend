@@ -2,10 +2,10 @@ const express = require('express');
 const router = express.Router();
 const Event = require('../models/events');
 
-// Fetch all events
+// Fetch all events sorted by date
 router.get('/', async (req, res) => {
   try {
-    const events = await Event.find();
+    const events = await Event.find().sort({ date: 1 }); // Sorting events in ascending order by date
     res.json(events);
   } catch (error) {
     console.error('Error fetching events:', error);
@@ -16,21 +16,25 @@ router.get('/', async (req, res) => {
 // Create a new event
 router.post('/add', async (req, res) => {
   try {
-    const { eventname, clubtype, club, image, date, description, type, registrationLink } = req.body;
+    const { eventname, clubtype, club, image, date, description, registrationLink } = req.body;
 
     // Validate required fields
-    if (!eventname || !clubtype || !club || !date || !type) {
+    if (!eventname || !clubtype || !club || !date) {
       return res.status(400).json({ error: 'Missing required fields' });
-    }
-
-    // Validate registration link for upcoming events
-    if (type === 'upcoming' && !registrationLink) {
-      return res.status(400).json({ error: 'Registration link is required for upcoming events' });
     }
 
     // Validate clubtype
     if (!['Technical', 'Social'].includes(clubtype)) {
       return res.status(400).json({ error: 'Invalid clubtype. Must be either Technical or Social' });
+    }
+
+    // Determine if event is upcoming or past based on date
+    const today = new Date().toISOString().split('T')[0];
+    const type = date >= today ? 'upcoming' : 'past';
+
+    // Validate registration link for upcoming events
+    if (type === 'upcoming' && !registrationLink) {
+      return res.status(400).json({ error: 'Registration link is required for upcoming events' });
     }
 
     // Create new event object
@@ -58,7 +62,7 @@ router.post('/add', async (req, res) => {
 router.get('/club/:clubName', async (req, res) => {
   try {
     const { clubName } = req.params;
-    const events = await Event.find({ club: clubName });
+    const events = await Event.find({ club: clubName }).sort({ date: 1 });
     res.json(events);
   } catch (error) {
     console.error('Error fetching club events:', error);
@@ -70,14 +74,15 @@ router.get('/club/:clubName', async (req, res) => {
 router.get('/upcoming/:clubtype?', async (req, res) => {
   try {
     const { clubtype } = req.params;
-    const query = { type: 'upcoming' };
-    
+    const today = new Date().toISOString().split('T')[0];
+    const query = { date: { $gte: today } };
+
     // Add clubtype to query if provided
     if (clubtype) {
       query.clubtype = clubtype;
     }
     
-    const events = await Event.find(query);
+    const events = await Event.find(query).sort({ date: 1 });
     res.json(events);
   } catch (error) {
     console.error('Error fetching upcoming events:', error);
@@ -89,14 +94,15 @@ router.get('/upcoming/:clubtype?', async (req, res) => {
 router.get('/past/:clubtype?', async (req, res) => {
   try {
     const { clubtype } = req.params;
-    const query = { type: 'past' };
-    
+    const today = new Date().toISOString().split('T')[0];
+    const query = { date: { $lt: today } };
+
     // Add clubtype to query if provided
     if (clubtype) {
       query.clubtype = clubtype;
     }
     
-    const events = await Event.find(query);
+    const events = await Event.find(query).sort({ date: -1 });
     res.json(events);
   } catch (error) {
     console.error('Error fetching past events:', error);
@@ -108,7 +114,7 @@ router.get('/past/:clubtype?', async (req, res) => {
 router.get('/clubtype/:clubtype', async (req, res) => {
   try {
     const { clubtype } = req.params;
-    const events = await Event.find({ clubtype });
+    const events = await Event.find({ clubtype }).sort({ date: 1 });
     res.json(events);
   } catch (error) {
     console.error('Error fetching events by clubtype:', error);
