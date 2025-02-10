@@ -4,6 +4,7 @@ const leadSchema = new mongoose.Schema({
   name: { type: String, required: true },
   collegeId: { type: String, required: true },
   email: { type: String, required: true },
+  mobilenumber: { type: String, required: true },
   password: { type: String, required: true },
   club: { type: String, required: true } ,// Changed from 'team' to 'club' to match frontend
   imageUrl: { type: String, default: null },
