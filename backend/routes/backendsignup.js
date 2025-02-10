@@ -22,8 +22,8 @@ const userSchema = {
 
 // Twilio setup
 const twilioClient = twilio(
-  'your_twilio_account_sid',
-  'your_twilio_auth_token'
+  'AC1f19d768f4b325cb6867d055c028a4be',
+  'eb42659d04ac0833d4ba26c89343ca0e'
 );
 
 // Nodemailer setup
