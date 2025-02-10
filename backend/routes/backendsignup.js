@@ -252,7 +252,7 @@ router.get('/approve/:id', async (req, res) => {
       name: signupRequest.name,
       collegeId: signupRequest.collegeId,
       email: signupRequest.email,
-      mobileNumber: signupRequest.mobilenumber,
+      mobilenumber: signupRequest.mobileNumber,
       password: signupRequest.password
     };
 
@@ -353,7 +353,7 @@ router.post('/check-exists', async (req, res) => {
   try {
     const { email, mobileNumber } = req.body;
 
-    const existingUser = await checkExistingUser(email, mobileNumber);
+    const existingUser = await checkExistingUser(email);
     
     if (existingUser) {
       // Determine which field(s) caused the conflict
