@@ -34,7 +34,7 @@ app.use('/api/signup', require('./routes/backendsignup'));
 app.use('/api/profile', require('./routes/backendprofile'));
 app.use('/api', require('./routes/backendadminprofiles'));
 app.use('/api/club-selection', require('./routes/clubSelectionRoutes'));
-
+app.use('/api/notifications', require('./routes/backendnotifications'));
 // Global error handler
 app.use((err, req, res, next) => {
     console.error('Server error:', err);
