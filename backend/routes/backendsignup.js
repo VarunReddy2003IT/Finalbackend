@@ -84,13 +84,29 @@ const validatePassword = (password) => {
   return passwordRegex.test(password);
 };
 
-const checkExistingUser = async (email, mobileNumber) => {
+const checkExistingUser = async (email) => {
   try {
     const queries = [
-      SignupRequest.findOne({ $or: [{ email }, { mobileNumber }] }),
-      Admin.findOne({ $or: [{ email }, { mobileNumber }] }),
-      Lead.findOne({ $or: [{ email }, { mobileNumber }] }),
-      Member.findOne({ $or: [{ email }, { mobileNumber }] })
+      SignupRequest.findOne({ email }),
+      Admin.findOne({ email }),
+      Lead.findOne({ email }),
+      Member.findOne({ email })
+    ];
+    
+    const results = await Promise.all(queries);
+    return results.find(result => result !== null);
+  } catch (error) {
+    console.error('Error checking existing user:', error);
+    throw new Error('Database error while checking existing user');
+  }
+};
+const checkExistingUserMobile = async (mobileNumber) => {
+  try {
+    const queries = [
+      SignupRequest.findOne({ mobileNumber }),
+      Admin.findOne({ mobileNumber }),
+      Lead.findOne({ mobileNumber }),
+      Member.findOne({ mobileNumber })
     ];
     
     const results = await Promise.all(queries);
@@ -196,7 +212,7 @@ router.post('/send-mobile-otp', async (req, res) => {
       });
     }
 
-    const existingUser = await checkExistingUser(null, mobileNumber);
+    const existingUser = await checkExistingUserMobile(mobileNumber);
     if (existingUser) {
       return res.status(400).json({ 
         message: 'An account with this mobile number already exists' 
