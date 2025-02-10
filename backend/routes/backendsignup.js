@@ -1,30 +1,20 @@
 const express = require('express');
 const bcrypt = require('bcryptjs');
-const twilio = require('twilio');
 const Admin = require('../models/admin');
 const Lead = require('../models/lead');
 const Member = require('../models/member');
 const SignupRequest = require('../models/signuprequest');
 const nodemailer = require('nodemailer');
+const twilio = require('twilio');
 
 const router = express.Router();
 
-// Update your model schema to include mobile number
-const userSchema = {
-  name: String,
-  collegeId: String,
-  email: String,
-  mobile: String,  // Added mobile field
-  password: String,
-  role: String,
-  club: String
-};
-
 // Twilio setup
 const twilioClient = twilio(
-  'AC1f19d768f4b325cb6867d055c028a4be',
-  'eb42659d04ac0833d4ba26c89343ca0e'
+  process.env.TWILIO_ACCOUNT_SID,
+  process.env.TWILIO_AUTH_TOKEN
 );
+const twilioPhoneNumber = process.env.TWILIO_PHONE_NUMBER;
 
 // Nodemailer setup
 const transporter = nodemailer.createTransport({
@@ -41,200 +31,278 @@ const clubs = [
   'GCCC','IEEE','CSI','AlgoRhythm','OpenForge','VLSID','SEEE','Sports'
 ];
 
-// OTP stores with verification status
-const verificationStore = new Map();
+// In-memory OTP stores
+const emailOtpStore = new Map();
+const mobileOtpStore = new Map();
 
-// Helper functions
+// Helper function to generate 6-digit OTP
 const generateOTP = () => {
   return Math.floor(100000 + Math.random() * 900000).toString();
 };
 
+// Helper function to validate email format
 const validateEmail = (email) => {
   const emailRegex = /^[a-zA-Z0-9._%+-]+@gvpce\.ac\.in$/;
   return emailRegex.test(email);
 };
 
-const validateMobile = (mobile) => {
+// Helper function to validate mobile number format
+const validateMobileNumber = (mobileNumber) => {
   const mobileRegex = /^[6-9]\d{9}$/;
-  return mobileRegex.test(mobile);
+  return mobileRegex.test(mobileNumber);
 };
 
+// Helper function to validate password strength
 const validatePassword = (password) => {
   const passwordRegex = /^(?=.*[A-Za-z])(?=.*\d)(?=.*[!@#$%^&*]).{8,}$/;
   return passwordRegex.test(password);
 };
 
-const checkExistingUser = async (email, mobile) => {
+// Helper function to check for existing user
+const checkExistingUser = async (email, mobileNumber) => {
   const queries = [
-    SignupRequest.findOne({ $or: [{ email }, { mobile }] }),
-    Admin.findOne({ $or: [{ email }, { mobile }] }),
-    Lead.findOne({ $or: [{ email }, { mobile }] }),
-    Member.findOne({ $or: [{ email }, { mobile }] })
+    SignupRequest.findOne({ $or: [{ email }, { mobileNumber }] }),
+    Admin.findOne({ $or: [{ email }, { mobileNumber }] }),
+    Lead.findOne({ $or: [{ email }, { mobileNumber }] }),
+    Member.findOne({ $or: [{ email }, { mobileNumber }] })
   ];
   
   const results = await Promise.all(queries);
-  return results.some(result => result !== null);
+  return results.find(result => result !== null);
 };
 
-// Route to initialize verification
-router.post('/init-verification', async (req, res) => {
+// Route to send email OTP
+router.post('/send-otp', async (req, res) => {
   try {
-    const { email, mobile } = req.body;
+    const { email } = req.body;
 
-    // Validate formats
+    // Validate email format
     if (!validateEmail(email)) {
-      return res.status(400).json({ message: 'Invalid email format' });
-    }
-    if (!validateMobile(mobile)) {
-      return res.status(400).json({ message: 'Invalid mobile number format' });
-    }
-
-    // Check for existing users
-    const existingUser = await checkExistingUser(email, mobile);
-    if (existingUser) {
       return res.status(400).json({ 
-        message: 'An account with this email or mobile already exists' 
+        message: 'Please use a valid GVPCE email address' 
       });
     }
 
-    // Generate verification ID and OTPs
-    const verificationId = Date.now().toString(36) + Math.random().toString(36).substr(2);
-    const emailOTP = generateOTP();
-    const mobileOTP = generateOTP();
+    // Check for existing user
+    const existingUser = await checkExistingUser(email);
+    if (existingUser) {
+      return res.status(400).json({ 
+        message: 'An account with this email already exists' 
+      });
+    }
 
-    // Store verification data
-    verificationStore.set(verificationId, {
-      email,
-      mobile,
-      emailOTP,
-      mobileOTP,
-      emailVerified: false,
-      mobileVerified: false,
-      expiry: Date.now() + 10 * 60 * 1000, // 10 minutes
-      attempts: {
-        email: 0,
-        mobile: 0
-      }
+    // Generate and store OTP
+    const otp = generateOTP();
+    emailOtpStore.set(email, {
+      otp,
+      expiry: Date.now() + 5 * 60 * 1000, // 5 minutes expiry
+      attempts: 0
     });
 
-    // Send email OTP
-    await transporter.sendMail({
+    // Send OTP email
+    const mailOptions = {
       from: 'varunreddy2new@gmail.com',
       to: email,
-      subject: 'GVPCE Club Connect - Email Verification',
+      subject: 'GVPCE Club Connect - Email Verification OTP',
       html: `
         <div style="font-family: Arial, sans-serif; padding: 20px;">
           <h2>Email Verification</h2>
-          <p>Your email verification OTP is: <strong>${emailOTP}</strong></p>
-          <p>This OTP will expire in 10 minutes.</p>
+          <p>Your OTP for GVPCE Club Connect signup is: <strong>${otp}</strong></p>
+          <p>This OTP will expire in 5 minutes.</p>
+          <p>If you didn't request this OTP, please ignore this email.</p>
         </div>
       `
-    });
+    };
 
-    // Send mobile OTP
-    await twilioClient.messages.create({
-      body: `Your GVPCE Club Connect mobile verification OTP is: ${mobileOTP}. Valid for 10 minutes.`,
-      to: `+91${mobile}`,
-      from: 'your_twilio_phone_number'
-    });
+    await transporter.sendMail(mailOptions);
 
     res.status(200).json({ 
-      message: 'Verification OTPs sent successfully',
-      verificationId 
+      message: 'OTP sent successfully to your email. Valid for 5 minutes.' 
     });
   } catch (error) {
-    console.error('Verification initialization error:', error);
-    res.status(500).json({ message: 'Error sending verification OTPs' });
+    console.error('Email OTP send error:', error);
+    res.status(500).json({ 
+      message: 'Error sending email OTP. Please try again later.' 
+    });
   }
 });
 
-// Route to verify OTPs
-router.post('/verify-otp', async (req, res) => {
+// Route to send mobile OTP
+router.post('/send-mobile-otp', async (req, res) => {
   try {
-    const { verificationId, type, otp } = req.body;
+    const { mobileNumber } = req.body;
 
-    const verificationData = verificationStore.get(verificationId);
-    if (!verificationData) {
-      return res.status(400).json({ message: 'Invalid or expired verification session' });
-    }
-
-    if (Date.now() > verificationData.expiry) {
-      verificationStore.delete(verificationId);
-      return res.status(400).json({ message: 'Verification session expired' });
-    }
-
-    // Verify OTP based on type
-    if (type === 'email') {
-      if (verificationData.attempts.email >= 3) {
-        return res.status(400).json({ message: 'Too many email verification attempts' });
-      }
-
-      if (verificationData.emailOTP !== otp) {
-        verificationData.attempts.email += 1;
-        return res.status(400).json({ message: 'Invalid email OTP' });
-      }
-
-      verificationData.emailVerified = true;
-    } else if (type === 'mobile') {
-      if (verificationData.attempts.mobile >= 3) {
-        return res.status(400).json({ message: 'Too many mobile verification attempts' });
-      }
-
-      if (verificationData.mobileOTP !== otp) {
-        verificationData.attempts.mobile += 1;
-        return res.status(400).json({ message: 'Invalid mobile OTP' });
-      }
-
-      verificationData.mobileVerified = true;
-    } else {
-      return res.status(400).json({ message: 'Invalid verification type' });
-    }
-
-    res.status(200).json({ 
-      message: `${type} verified successfully`,
-      emailVerified: verificationData.emailVerified,
-      mobileVerified: verificationData.mobileVerified
-    });
-  } catch (error) {
-    console.error('OTP verification error:', error);
-    res.status(500).json({ message: 'Error verifying OTP' });
-  }
-});
-
-// Route to complete signup
-router.post('/complete-signup', async (req, res) => {
-  try {
-    const { verificationId, name, collegeId, password, role, club } = req.body;
-
-    // Validate verification session
-    const verificationData = verificationStore.get(verificationId);
-    if (!verificationData || !verificationData.emailVerified || !verificationData.mobileVerified) {
-      return res.status(400).json({ message: 'Please complete verification first' });
-    }
-
-    // Validate password
-    if (!validatePassword(password)) {
+    // Validate mobile number format
+    if (!validateMobileNumber(mobileNumber)) {
       return res.status(400).json({ 
-        message: 'Password must be at least 8 characters with numbers and special characters' 
+        message: 'Please enter a valid 10-digit Indian mobile number' 
       });
     }
 
-    // Hash password
-    const hashedPassword = await bcrypt.hash(password, 10);
+    // Check for existing user
+    const existingUser = await checkExistingUser(null, mobileNumber);
+    if (existingUser) {
+      return res.status(400).json({ 
+        message: 'An account with this mobile number already exists' 
+      });
+    }
 
-    const userData = {
-      name,
-      collegeId,
-      email: verificationData.email,
-      mobile: verificationData.mobile,
-      password: hashedPassword,
-      role,
-      club: role === 'lead' ? club : undefined
-    };
+    // Generate and store OTP
+    const otp = generateOTP();
+    mobileOtpStore.set(mobileNumber, {
+      otp,
+      expiry: Date.now() + 5 * 60 * 1000, // 5 minutes expiry
+      attempts: 0
+    });
+
+    // Send OTP via Twilio
+    await twilioClient.messages.create({
+      body: `Your GVPCE Club Connect mobile verification OTP is: ${otp}. Valid for 5 minutes.`,
+      from: twilioPhoneNumber,
+      to: `+91${mobileNumber}`
+    });
+
+    res.status(200).json({ 
+      message: 'OTP sent successfully to your mobile number. Valid for 5 minutes.' 
+    });
+  } catch (error) {
+    console.error('Mobile OTP send error:', error);
+    res.status(500).json({ 
+      message: 'Error sending mobile OTP. Please try again later.' 
+    });
+  }
+});
+
+// Route to verify OTPs and complete signup
+router.post('/verify', async (req, res) => {
+  try {
+    const { 
+      name, collegeId, email, mobileNumber, password, 
+      role, club, emailOtp, mobileOtp 
+    } = req.body;
+
+    // Basic validation
+    if (!name || !collegeId || !email || !mobileNumber || 
+        !password || !role || !emailOtp || !mobileOtp) {
+      return res.status(400).json({ message: 'All fields are required' });
+    }
+
+    // Validate email format
+    if (!validateEmail(email)) {
+      return res.status(400).json({ 
+        message: 'Please use a valid GVPCE email address' 
+      });
+    }
+
+    // Validate mobile number format
+    if (!validateMobileNumber(mobileNumber)) {
+      return res.status(400).json({ 
+        message: 'Please enter a valid 10-digit Indian mobile number' 
+      });
+    }
+
+    // Validate password strength
+    if (!validatePassword(password)) {
+      return res.status(400).json({ 
+        message: 'Password must be at least 8 characters long and contain a number and a special character' 
+      });
+    }
+
+    // Verify email OTP
+    const emailOtpData = emailOtpStore.get(email);
+    if (!emailOtpData) {
+      return res.status(400).json({ 
+        message: 'Email OTP not found. Please request a new OTP.' 
+      });
+    }
+
+    if (Date.now() > emailOtpData.expiry) {
+      emailOtpStore.delete(email);
+      return res.status(400).json({ 
+        message: 'Email OTP has expired. Please request a new OTP.' 
+      });
+    }
+
+    if (emailOtpData.otp !== emailOtp) {
+      emailOtpData.attempts += 1;
+      if (emailOtpData.attempts >= 3) {
+        emailOtpStore.delete(email);
+        return res.status(400).json({ 
+          message: 'Too many incorrect email OTP attempts. Please request a new OTP.' 
+        });
+      }
+      return res.status(400).json({ 
+        message: 'Invalid email OTP. Please try again.' 
+      });
+    }
+
+    // Verify mobile OTP
+    const mobileOtpData = mobileOtpStore.get(mobileNumber);
+    if (!mobileOtpData) {
+      return res.status(400).json({ 
+        message: 'Mobile OTP not found. Please request a new OTP.' 
+      });
+    }
+
+    if (Date.now() > mobileOtpData.expiry) {
+      mobileOtpStore.delete(mobileNumber);
+      return res.status(400).json({ 
+        message: 'Mobile OTP has expired. Please request a new OTP.' 
+      });
+    }
+
+    if (mobileOtpData.otp !== mobileOtp) {
+      mobileOtpData.attempts += 1;
+      if (mobileOtpData.attempts >= 3) {
+        mobileOtpStore.delete(mobileNumber);
+        return res.status(400).json({ 
+          message: 'Too many incorrect mobile OTP attempts. Please request a new OTP.' 
+        });
+      }
+      return res.status(400).json({ 
+        message: 'Invalid mobile OTP. Please try again.' 
+      });
+    }
+
+    // Remove used OTPs
+    emailOtpStore.delete(email);
+    mobileOtpStore.delete(mobileNumber);
+
+    // Validate club for lead role
+    if (role === 'lead') {
+      if (!club) {
+        return res.status(400).json({ 
+          message: 'Club selection is required for lead role' 
+        });
+      }
+      if (!clubs.includes(club)) {
+        return res.status(400).json({ message: 'Invalid club selection' });
+      }
+    }
+
+    // Check for existing user again
+    const existingUser = await checkExistingUser(email, mobileNumber);
+    if (existingUser) {
+      return res.status(400).json({ 
+        message: 'An account with this email or mobile number was created while verifying. Please try again with different credentials.' 
+      });
+    }
+
+    // Hash the password
+    const hashedPassword = await bcrypt.hash(password, 10);
 
     // Handle admin and lead signups
     if (role === 'admin' || role === 'lead') {
-      const newRequest = new SignupRequest(userData);
+      const newRequest = new SignupRequest({
+        name,
+        collegeId,
+        email,
+        mobileNumber,
+        role,
+        password: hashedPassword,
+        club: role === 'lead' ? club : undefined
+      });
+
       await newRequest.save();
 
       // Fetch admin emails
@@ -247,17 +315,17 @@ router.post('/complete-signup', async (req, res) => {
         });
       }
 
-      // Send approval request email to admins
-      await transporter.sendMail({
+      // Send email to admins
+      const mailOptions = {
         from: 'varunreddy2new@gmail.com',
         to: adminEmails,
-        subject: `GVPCE Club Connect - New ${role} Signup Request`,
+        subject: `GVPCE Club Connect Signup Request for ${role}`,
         html: `
           <div style="font-family: Arial, sans-serif; padding: 20px;">
             <h2>New Signup Request</h2>
             <p><strong>Name:</strong> ${name}</p>
-            <p><strong>Email:</strong> ${verificationData.email}</p>
-            <p><strong>Mobile:</strong> ${verificationData.mobile}</p>
+            <p><strong>Email:</strong> ${email}</p>
+            <p><strong>Mobile:</strong> ${mobileNumber}</p>
             <p><strong>Role:</strong> ${role}</p>
             ${role === 'lead' ? `<p><strong>Club:</strong> ${club}</p>` : ''}
             <p><strong>College ID:</strong> ${collegeId}</p>
@@ -273,22 +341,30 @@ router.post('/complete-signup', async (req, res) => {
             </div>
           </div>
         `
-      });
+      };
 
-      verificationStore.delete(verificationId);
+      await transporter.sendMail(mailOptions);
+
       res.status(200).json({ 
-        message: `${role} signup request submitted. Please wait for admin approval.` 
+        message: `${role} signup request submitted successfully. Please wait for admin approval.` 
       });
     } 
     // Handle member signups
     else if (role === 'member') {
-      const newMember = new Member(userData);
+      const newMember = new Member({
+        name,
+        collegeId,
+        email,
+        mobileNumber,
+        password: hashedPassword
+      });
+
       await newMember.save();
 
       // Send welcome email
-      await transporter.sendMail({
+      const welcomeEmail = {
         from: 'varunreddy2new@gmail.com',
-        to: verificationData.email,
+        to: email,
         subject: 'Welcome to GVPCE Club Connect!',
         html: `
           <div style="font-family: Arial, sans-serif; padding: 20px;">
@@ -299,21 +375,24 @@ router.post('/complete-signup', async (req, res) => {
             <p>Thank you for joining!</p>
           </div>
         `
-      });
+      };
 
-      verificationStore.delete(verificationId);
+      await transporter.sendMail(welcomeEmail);
+
       res.status(200).json({ message: 'Member account created successfully' });
     } 
     else {
       return res.status(400).json({ message: 'Invalid role specified' });
     }
   } catch (error) {
-    console.error('Signup completion error:', error);
-    res.status(500).json({ message: 'Error completing signup' });
+    console.error('Signup error:', error);
+    res.status(500).json({ 
+      message: 'An error occurred during signup. Please try again later.' 
+    });
   }
 });
+// Continuing from previous route file...
 
-// Route to approve a signup request
 router.get('/approve/:id', async (req, res) => {
   try {
     const signupRequest = await SignupRequest.findById(req.params.id);
@@ -327,6 +406,7 @@ router.get('/approve/:id', async (req, res) => {
       name: signupRequest.name,
       collegeId: signupRequest.collegeId,
       email: signupRequest.email,
+      mobileNumber: signupRequest.mobileNumber,
       password: signupRequest.password
     };
 
@@ -360,9 +440,18 @@ router.get('/approve/:id', async (req, res) => {
           <p>Your account request has been approved. You can now log in to access the platform.</p>
           <p>Role: ${signupRequest.role}</p>
           ${signupRequest.role === 'lead' ? `<p>Club: ${signupRequest.club}</p>` : ''}
+          <p>Email: ${signupRequest.email}</p>
+          <p>Mobile: ${signupRequest.mobileNumber}</p>
         </div>
       `
     };
+
+    // Send SMS notification
+    await twilioClient.messages.create({
+      body: `Your GVPCE Club Connect account has been approved! You can now log in with your email and password.`,
+      from: twilioPhoneNumber,
+      to: `+91${signupRequest.mobileNumber}`
+    });
 
     await transporter.sendMail(approvalEmail);
     await SignupRequest.findByIdAndDelete(req.params.id);
@@ -400,6 +489,13 @@ router.get('/reject/:id', async (req, res) => {
       `
     };
 
+    // Send SMS notification
+    await twilioClient.messages.create({
+      body: `Your GVPCE Club Connect account request has been declined. If you believe this was a mistake, please try signing up again or contact support.`,
+      from: twilioPhoneNumber,
+      to: `+91${signupRequest.mobileNumber}`
+    });
+
     await transporter.sendMail(rejectionEmail);
     await SignupRequest.findByIdAndDelete(req.params.id);
 
@@ -420,6 +516,112 @@ router.get('/pending', async (req, res) => {
   } catch (error) {
     console.error('Error fetching pending requests:', error);
     res.status(500).json({ message: 'Error fetching pending requests' });
+  }
+});
+
+// Route to validate mobile number format
+router.post('/validate-mobile', async (req, res) => {
+  try {
+    const { mobileNumber } = req.body;
+
+    if (!validateMobileNumber(mobileNumber)) {
+      return res.status(400).json({ 
+        message: 'Please enter a valid 10-digit Indian mobile number',
+        valid: false 
+      });
+    }
+
+    const existingUser = await checkExistingUser(null, mobileNumber);
+    if (existingUser) {
+      return res.status(400).json({ 
+        message: 'An account with this mobile number already exists',
+        valid: false 
+      });
+    }
+
+    res.status(200).json({ 
+      message: 'Mobile number is valid and available',
+      valid: true 
+    });
+  } catch (error) {
+    console.error('Mobile validation error:', error);
+    res.status(500).json({ 
+      message: 'Error validating mobile number',
+      valid: false 
+    });
+  }
+});
+
+// Route to resend OTP (both email and mobile)
+router.post('/resend-otp', async (req, res) => {
+  try {
+    const { type, email, mobileNumber } = req.body;
+
+    if (type === 'email') {
+      if (!email || !validateEmail(email)) {
+        return res.status(400).json({ 
+          message: 'Please provide a valid email address' 
+        });
+      }
+
+      // Generate and store new email OTP
+      const otp = generateOTP();
+      emailOtpStore.set(email, {
+        otp,
+        expiry: Date.now() + 5 * 60 * 1000,
+        attempts: 0
+      });
+
+      // Send new email OTP
+      const mailOptions = {
+        from: 'varunreddy2new@gmail.com',
+        to: email,
+        subject: 'GVPCE Club Connect - New Email Verification OTP',
+        html: `
+          <div style="font-family: Arial, sans-serif; padding: 20px;">
+            <h2>Email Verification</h2>
+            <p>Your new OTP for GVPCE Club Connect signup is: <strong>${otp}</strong></p>
+            <p>This OTP will expire in 5 minutes.</p>
+          </div>
+        `
+      };
+
+      await transporter.sendMail(mailOptions);
+    } else if (type === 'mobile') {
+      if (!mobileNumber || !validateMobileNumber(mobileNumber)) {
+        return res.status(400).json({ 
+          message: 'Please provide a valid mobile number' 
+        });
+      }
+
+      // Generate and store new mobile OTP
+      const otp = generateOTP();
+      mobileOtpStore.set(mobileNumber, {
+        otp,
+        expiry: Date.now() + 5 * 60 * 1000,
+        attempts: 0
+      });
+
+      // Send new mobile OTP
+      await twilioClient.messages.create({
+        body: `Your new GVPCE Club Connect mobile verification OTP is: ${otp}. Valid for 5 minutes.`,
+        from: twilioPhoneNumber,
+        to: `+91${mobileNumber}`
+      });
+    } else {
+      return res.status(400).json({ 
+        message: 'Invalid OTP type specified' 
+      });
+    }
+
+    res.status(200).json({ 
+      message: `New OTP sent successfully to your ${type}` 
+    });
+  } catch (error) {
+    console.error('Resend OTP error:', error);
+    res.status(500).json({ 
+      message: `Error resending OTP to ${type}` 
+    });
   }
 });
 
