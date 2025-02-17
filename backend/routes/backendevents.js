@@ -122,7 +122,7 @@ router.get('/clubtype/:clubtype', async (req, res) => {
   }
 });
 
-app.post('/api/events/:eventId/documents', async (req, res) => {
+router.post('/api/events/:eventId/documents', async (req, res) => {
   try {
     const { eventId } = req.params;
     const { documentUrls } = req.body;
