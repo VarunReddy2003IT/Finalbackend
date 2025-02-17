@@ -25,11 +25,6 @@ const clubEventSchema = new mongoose.Schema({
     type: String, 
     required: true 
   },
-  type: { 
-    type: String, 
-    enum: ['upcoming', 'past'], 
-    required: true 
-  },
   registrationLink: {
     type: String,
     required: function() {
