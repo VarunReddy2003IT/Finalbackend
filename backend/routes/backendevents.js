@@ -122,24 +122,4 @@ router.get('/clubtype/:clubtype', async (req, res) => {
   }
 });
 
-router.post('/api/events/:eventId/documents', async (req, res) => {
-  try {
-    const { eventId } = req.params;
-    const { documentUrl} = req.body;
-
-    const event = await Event.findById(eventId);
-    if (!event) {
-      return res.status(404).json({ error: 'Event not found' });
-    }
-
-    event.document = documentUrl;
-    const updatedEvent = await event.save();
-
-    res.json(updatedEvent);
-  } catch (error) {
-    console.error('Error adding documents:', error);
-    res.status(500).json({ error: 'Failed to add documents' });
-  }
-});
-
 module.exports = router;
