@@ -125,24 +125,14 @@ router.get('/clubtype/:clubtype', async (req, res) => {
 router.post('/api/events/:eventId/documents', async (req, res) => {
   try {
     const { eventId } = req.params;
-    const { documentUrls } = req.body;
-
-    if (!Array.isArray(documentUrls)) {
-      return res.status(400).json({ error: 'documentUrls must be an array' });
-    }
+    const { documentUrl} = req.body;
 
     const event = await Event.findById(eventId);
     if (!event) {
       return res.status(404).json({ error: 'Event not found' });
     }
 
-    const newDocuments = documentUrls.map(url => ({
-      url,
-      name: url.split('/').pop(),
-      uploadedAt: new Date()
-    }));
-
-    event.documents = [...(event.documents || []), ...newDocuments];
+    event.document = documentUrl;
     const updatedEvent = await event.save();
 
     res.json(updatedEvent);

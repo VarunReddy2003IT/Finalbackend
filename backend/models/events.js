@@ -31,11 +31,10 @@ const clubEventSchema = new mongoose.Schema({
       return this.type === 'upcoming';
     }
   },
-  documents: [{
-    name: String,
-    url: String,
-    uploadedAt: Date
-  }]
+  document: {
+    type:String,
+    default:''
+  }
 }, { 
   timestamps: true 
 });
