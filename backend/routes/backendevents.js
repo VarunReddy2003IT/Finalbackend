@@ -5,7 +5,7 @@ const Event = require('../models/events');
 // Fetch all events sorted by date
 router.get('/', async (req, res) => {
   try {
-    const events = await Event.find().sort({ date: 1 }); // Sorting events in ascending order by date
+    const events = await Event.find().sort({ date: 1 });
     res.json(events);
   } catch (error) {
     console.error('Error fetching events:', error);
@@ -18,26 +18,21 @@ router.post('/add', async (req, res) => {
   try {
     const { eventname, clubtype, club, image, date, description, registrationLink } = req.body;
 
-    // Validate required fields
     if (!eventname || !clubtype || !club || !date) {
       return res.status(400).json({ error: 'Missing required fields' });
     }
 
-    // Validate clubtype
-    if (!['Technical', 'Social'].includes(clubtype)) {
-      return res.status(400).json({ error: 'Invalid clubtype. Must be either Technical or Social' });
+    if (!['Technical', 'Social','Cultural'].includes(clubtype)) {
+      return res.status(400).json({ error: 'Invalid clubtype. Must be either Technical or Social or Cultural' });
     }
 
-    // Determine if event is upcoming or past based on date
     const today = new Date().toISOString().split('T')[0];
     const type = date >= today ? 'upcoming' : 'past';
 
-    // Validate registration link for upcoming events
     if (type === 'upcoming' && !registrationLink) {
       return res.status(400).json({ error: 'Registration link is required for upcoming events' });
     }
 
-    // Create new event object
     const newEvent = new Event({
       eventname,
       clubtype,
@@ -49,12 +44,28 @@ router.post('/add', async (req, res) => {
       registrationLink: type === 'upcoming' ? registrationLink : undefined
     });
 
-    // Save the event
     const savedEvent = await newEvent.save();
     res.status(201).json(savedEvent);
   } catch (error) {
     console.error('Error creating event:', error);
     res.status(500).json({ error: 'Failed to create event' });
+  }
+});
+
+// Delete an event by ID
+router.delete('/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const deletedEvent = await Event.findByIdAndDelete(id);
+
+    if (!deletedEvent) {
+      return res.status(404).json({ error: 'Event not found' });
+    }
+
+    res.json({ message: 'Event deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting event:', error);
+    res.status(500).json({ error: 'Failed to delete event' });
   }
 });
 
@@ -77,7 +88,6 @@ router.get('/upcoming/:clubtype?', async (req, res) => {
     const today = new Date().toISOString().split('T')[0];
     const query = { date: { $gte: today } };
 
-    // Add clubtype to query if provided
     if (clubtype) {
       query.clubtype = clubtype;
     }
@@ -97,7 +107,6 @@ router.get('/past/:clubtype?', async (req, res) => {
     const today = new Date().toISOString().split('T')[0];
     const query = { date: { $lt: today } };
 
-    // Add clubtype to query if provided
     if (clubtype) {
       query.clubtype = clubtype;
     }
