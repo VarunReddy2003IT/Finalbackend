@@ -16,21 +16,33 @@ router.get('/', async (req, res) => {
 // Create a new event
 router.post('/add', async (req, res) => {
   try {
-    const { eventname, clubtype, club, image, date, description, registrationLink } = req.body;
+    const { 
+      eventname, 
+      clubtype, 
+      club, 
+      image, 
+      date, 
+      description,
+      paymentRequired,
+      paymentLink 
+    } = req.body;
 
-    if (!eventname || !clubtype || !club || !date) {
+    if (!eventname || !clubtype || !club || !date || !description) {
       return res.status(400).json({ error: 'Missing required fields' });
     }
 
-    if (!['Technical', 'Social','Cultural'].includes(clubtype)) {
-      return res.status(400).json({ error: 'Invalid clubtype. Must be either Technical or Social or Cultural' });
+    if (!['Technical', 'Social', 'Cultural'].includes(clubtype)) {
+      return res.status(400).json({ 
+        error: 'Invalid clubtype. Must be either Technical, Social, or Cultural' 
+      });
     }
 
     const today = new Date().toISOString().split('T')[0];
     const type = date >= today ? 'upcoming' : 'past';
 
-    if (type === 'upcoming' && !registrationLink) {
-      return res.status(400).json({ error: 'Registration link is required for upcoming events' });
+    // Validate payment link if payment is required for upcoming events
+    if (paymentRequired && type === 'upcoming' && !paymentLink) {
+      return res.status(400).json({ error: 'Payment link is required when payment is enabled' });
     }
 
     const newEvent = new Event({
@@ -41,7 +53,8 @@ router.post('/add', async (req, res) => {
       date,
       description,
       type,
-      registrationLink: type === 'upcoming' ? registrationLink : undefined
+      paymentRequired: paymentRequired || false,
+      paymentLink: paymentRequired ? paymentLink : undefined
     });
 
     const savedEvent = await newEvent.save();
