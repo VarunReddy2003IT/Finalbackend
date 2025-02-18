@@ -1,6 +1,8 @@
 const express = require('express');
 const router = express.Router();
 const Event = require('../models/events');
+const Member = require('../models/member'); // Add this import
+const Lead = require('../models/lead');
 
 // Fetch all events sorted by date
 router.get('/', async (req, res) => {
