@@ -144,4 +144,63 @@ router.get('/clubtype/:clubtype', async (req, res) => {
   }
 });
 
+router.post('/register/:eventId', async (req, res) => {
+  try {
+    const { eventId } = req.params;
+    const { userEmail } = req.body;
+
+    const event = await Event.findById(eventId);
+    if (!event) {
+      return res.status(404).json({ error: 'Event not found' });
+    }
+
+    // Check if already registered
+    if (event.registeredEmails.includes(userEmail)) {
+      return res.status(400).json({ error: 'Already registered for this event' });
+    }
+
+    // Add email to registered list
+    event.registeredEmails.push(userEmail);
+    await event.save();
+
+    res.json({ message: 'Registration successful' });
+  } catch (error) {
+    console.error('Error registering for event:', error);
+    res.status(500).json({ error: 'Failed to register for event' });
+  }
+});
+
+// Get registered members' profiles
+router.get('/registered-profiles/:eventId', async (req, res) => {
+  try {
+    const { eventId } = req.params;
+    const event = await Event.findById(eventId);
+    
+    if (!event) {
+      return res.status(404).json({ error: 'Event not found' });
+    }
+
+    // Fetch profiles from both Member and Lead collections
+    const memberProfiles = await Member.find({ 
+      email: { $in: event.registeredEmails }
+    }).select('name email collegeId mobilenumber imageUrl');
+
+    const leadProfiles = await Lead.find({ 
+      email: { $in: event.registeredEmails }
+    }).select('name email collegeId mobilenumber imageUrl');
+
+    // Combine and remove duplicates based on email
+    const allProfiles = [...memberProfiles, ...leadProfiles];
+    const uniqueProfiles = Array.from(
+      new Map(allProfiles.map(profile => [profile.email, profile])).values()
+    );
+
+    res.json(uniqueProfiles);
+  } catch (error) {
+    console.error('Error fetching registered profiles:', error);
+    res.status(500).json({ error: 'Failed to fetch registered profiles' });
+  }
+});
+
+
 module.exports = router;
