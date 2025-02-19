@@ -12,9 +12,10 @@ const clubEventSchema = new mongoose.Schema({
     const isUpcoming = this.date >= new Date();
     return this.paymentRequired && isUpcoming;
   }},
-  registeredEmails: [{ type: String }]  // Array of registered member emails
+  registeredEmails: [{ type: String }],
+  documentUrl: { type: String, default: '' }  // New field for document URL
 }, {
-  timestamps: true
+  timestamps: true 
 });
 
 const ClubEvent = mongoose.model('Events', clubEventSchema, 'Events');

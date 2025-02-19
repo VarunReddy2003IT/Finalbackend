@@ -204,5 +204,24 @@ router.get('/registered-profiles/:eventId', async (req, res) => {
   }
 });
 
+router.post('/upload-document/:eventId', async (req, res) => {
+  try {
+    const { eventId } = req.params;
+    const { documentUrl } = req.body;
+
+    const event = await Event.findById(eventId);
+    if (!event) {
+      return res.status(404).json({ error: 'Event not found' });
+    }
+
+    event.documentUrl = documentUrl;
+    await event.save();
+
+    res.json({ message: 'Document uploaded successfully' });
+  } catch (error) {
+    console.error('Error uploading document:', error);
+    res.status(500).json({ error: 'Failed to upload document' });
+  }
+});
 
 module.exports = router;
