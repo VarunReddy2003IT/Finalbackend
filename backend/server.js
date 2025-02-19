@@ -35,6 +35,9 @@ app.use('/api/profile', require('./routes/backendprofile'));
 app.use('/api', require('./routes/backendadminprofiles'));
 app.use('/api/club-selection', require('./routes/clubSelectionRoutes'));
 
+const forgotPasswordRouter = require('./routes/forgotpassword');
+app.use('/api', forgotPasswordRouter);
+
 // Global error handler
 app.use((err, req, res, next) => {
     console.error('Server error:', err);
