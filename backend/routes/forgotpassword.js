@@ -3,6 +3,9 @@ const router = express.Router();
 const nodemailer = require('nodemailer');
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
+const Admin = require('../models/admin');
+const Lead = require('../models/lead');
+const Member = require('../models/member');
 
 // Store OTPs temporarily (in production, use Redis or similar)
 const otpStore = new Map();
