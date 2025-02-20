@@ -99,7 +99,7 @@ router.get('/members-by-club', async (req, res) => {
         // Run both queries in parallel
         const [members, leads] = await Promise.all([
             Member.find({ selectedClubs: clubName })
-            // Lead.find({ selectedClubs: clubName })
+            Lead.find({ selectedClubs: clubName })
         ]);
 
         // Merge both collections
