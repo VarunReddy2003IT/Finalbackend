@@ -229,6 +229,7 @@ router.post('/mark-participation/:eventId', async (req, res) => {
     const { eventId } = req.params;
     const { userEmail, participated, eventDetails } = req.body;
     console.log(userEmail);
+    
     // Find the event
     const event = await Event.findById(eventId);
     if (!event) {
@@ -240,23 +241,21 @@ router.post('/mark-participation/:eventId', async (req, res) => {
       return res.status(400).json({ error: 'User not registered for this event' });
     }
 
-    // Function to update participation
-    const updateParticipation = async () => {
+    // Update participation status
+    if (participated && eventDetails) {
+      // Update Member collection
       await Member.findOneAndUpdate(
         { email: userEmail },
-        { $addToSet: { participatedEvents: eventDetails } }, // Ensures uniqueness
-        { new: true } // Returns the updated document
+        { $addToSet: { participatedEvents: eventDetails } },
+        { new: true }
       );
+      
+      // Update Lead collection
       await Lead.findOneAndUpdate(
         { email: userEmail },
-        { $addToSet: { participatedEvents: eventDetails } }, // Ensures uniqueness
-        { new: true } // Returns the updated document
+        { $addToSet: { participatedEvents: eventDetails } },
+        { new: true }
       );
-    };
-
-    if (participated && eventDetails) {
-      await updateParticipation(Member);
-      await updateParticipation(Lead);
     }
 
     res.json({ 
@@ -267,6 +266,47 @@ router.post('/mark-participation/:eventId', async (req, res) => {
   } catch (error) {
     console.error('Error marking participation:', error);
     res.status(500).json({ error: 'Failed to mark participation status' });
+  }
+});
+router.get('/registered-profiles/:eventId', async (req, res) => {
+  try {
+    const { eventId } = req.params;
+    const event = await Event.findById(eventId);
+    
+    if (!event) {
+      return res.status(404).json({ error: 'Event not found' });
+    }
+
+    // Fetch profiles from both Member and Lead collections
+    const memberProfiles = await Member.find({ 
+      email: { $in: event.registeredEmails }
+    }).select('name email collegeId mobilenumber imageUrl participatedEvents');
+
+    const leadProfiles = await Lead.find({ 
+      email: { $in: event.registeredEmails }
+    }).select('name email collegeId mobilenumber imageUrl participatedEvents');
+
+    // Combine and remove duplicates based on email
+    const allProfiles = [...memberProfiles, ...leadProfiles];
+    const uniqueProfiles = Array.from(
+      new Map(allProfiles.map(profile => [profile.email, profile])).values()
+    );
+
+    // Add participation status based on participatedEvents array
+    const eventIdentifier = `${event.eventname}-${event.club}`;
+    const profilesWithStatus = uniqueProfiles.map(profile => {
+      const hasParticipated = profile.participatedEvents && 
+                             profile.participatedEvents.includes(eventIdentifier);
+      return {
+        ...profile.toObject(),
+        participationStatus: hasParticipated ? 'participated' : undefined
+      };
+    });
+
+    res.json(profilesWithStatus);
+  } catch (error) {
+    console.error('Error fetching registered profiles:', error);
+    res.status(500).json({ error: 'Failed to fetch registered profiles' });
   }
 });
 
