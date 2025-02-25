@@ -224,4 +224,84 @@ router.post('/upload-document/:eventId', async (req, res) => {
   }
 });
 
+router.post('/mark-participation/:eventId', async (req, res) => {
+  try {
+    const { eventId } = req.params;
+    const { userEmail, participated, eventDetails } = req.body;
+
+    // Find the event
+    const event = await Event.findById(eventId);
+    if (!event) {
+      return res.status(404).json({ error: 'Event not found' });
+    }
+
+    // Check if the user is registered
+    if (!event.registeredEmails.includes(userEmail)) {
+      return res.status(400).json({ error: 'User not registered for this event' });
+    }
+
+    // Update member or lead record with participation status
+    const member = await Member.findOne({ email: userEmail });
+    const lead = await Lead.findOne({ email: userEmail });
+
+    if (participated && eventDetails) {
+      // Add the event to participatedEvents array if the user participated
+      if (member) {
+        // If participatedEvents field doesn't exist, create it
+        if (!member.participatedEvents) {
+          member.participatedEvents = [];
+        }
+        // Add event if not already in the list
+        if (!member.participatedEvents.includes(eventDetails)) {
+          member.participatedEvents.push(eventDetails);
+          await member.save();
+        }
+      }
+
+      if (lead) {
+        // If participatedEvents field doesn't exist, create it
+        if (!lead.participatedEvents) {
+          lead.participatedEvents = [];
+        }
+        // Add event if not already in the list
+        if (!lead.participatedEvents.includes(eventDetails)) {
+          lead.participatedEvents.push(eventDetails);
+          await lead.save();
+        }
+      }
+    }
+
+    res.json({ 
+      message: participated ? 
+        'User marked as participated' : 
+        'User marked as not participated' 
+    });
+  } catch (error) {
+    console.error('Error marking participation:', error);
+    res.status(500).json({ error: 'Failed to mark participation status' });
+  }
+});
+
+// New route to remove user registration
+router.post('/remove-registration/:eventId', async (req, res) => {
+  try {
+    const { eventId } = req.params;
+    const { userEmail } = req.body;
+
+    // Find and update the event
+    const event = await Event.findById(eventId);
+    if (!event) {
+      return res.status(404).json({ error: 'Event not found' });
+    }
+
+    // Remove email from registeredEmails array
+    event.registeredEmails = event.registeredEmails.filter(email => email !== userEmail);
+    await event.save();
+
+    res.json({ message: 'Registration removed successfully' });
+  } catch (error) {
+    console.error('Error removing registration:', error);
+    res.status(500).json({ error: 'Failed to remove registration' });
+  }
+});
 module.exports = router;
