@@ -228,7 +228,7 @@ router.post('/mark-participation/:eventId', async (req, res) => {
   try {
     const { eventId } = req.params;
     const { userEmail, participated, eventDetails } = req.body;
-
+    console.log(userEmail);
     // Find the event
     const event = await Event.findById(eventId);
     if (!event) {
@@ -241,8 +241,13 @@ router.post('/mark-participation/:eventId', async (req, res) => {
     }
 
     // Function to update participation
-    const updateParticipation = async (Model) => {
-      await Model.findOneAndUpdate(
+    const updateParticipation = async () => {
+      await Member.findOneAndUpdate(
+        { email: userEmail },
+        { $addToSet: { participatedEvents: eventDetails } }, // Ensures uniqueness
+        { new: true } // Returns the updated document
+      );
+      await Lead.findOneAndUpdate(
         { email: userEmail },
         { $addToSet: { participatedEvents: eventDetails } }, // Ensures uniqueness
         { new: true } // Returns the updated document
