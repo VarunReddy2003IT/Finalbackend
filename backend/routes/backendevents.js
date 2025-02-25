@@ -172,37 +172,6 @@ router.post('/register/:eventId', async (req, res) => {
   }
 });
 
-// Get registered members' profiles
-router.get('/registered-profiles/:eventId', async (req, res) => {
-  try {
-    const { eventId } = req.params;
-    const event = await Event.findById(eventId);
-    
-    if (!event) {
-      return res.status(404).json({ error: 'Event not found' });
-    }
-
-    // Fetch profiles from both Member and Lead collections
-    const memberProfiles = await Member.find({ 
-      email: { $in: event.registeredEmails }
-    }).select('name email collegeId mobilenumber imageUrl');
-
-    const leadProfiles = await Lead.find({ 
-      email: { $in: event.registeredEmails }
-    }).select('name email collegeId mobilenumber imageUrl');
-
-    // Combine and remove duplicates based on email
-    const allProfiles = [...memberProfiles, ...leadProfiles];
-    const uniqueProfiles = Array.from(
-      new Map(allProfiles.map(profile => [profile.email, profile])).values()
-    );
-
-    res.json(uniqueProfiles);
-  } catch (error) {
-    console.error('Error fetching registered profiles:', error);
-    res.status(500).json({ error: 'Failed to fetch registered profiles' });
-  }
-});
 
 router.post('/upload-document/:eventId', async (req, res) => {
   try {
