@@ -240,35 +240,18 @@ router.post('/mark-participation/:eventId', async (req, res) => {
       return res.status(400).json({ error: 'User not registered for this event' });
     }
 
-    // Update member or lead record with participation status
-    const member = await Member.findOne({ email: userEmail });
-    const lead = await Lead.findOne({ email: userEmail });
+    // Function to update participation
+    const updateParticipation = async (Model) => {
+      await Model.findOneAndUpdate(
+        { email: userEmail },
+        { $addToSet: { participatedEvents: eventDetails } }, // Ensures uniqueness
+        { new: true } // Returns the updated document
+      );
+    };
 
     if (participated && eventDetails) {
-      // Add the event to participatedEvents array if the user participated
-      if (member) {
-        // If participatedEvents field doesn't exist, create it
-        if (!member.participatedEvents) {
-          member.participatedEvents = [];
-        }
-        // Add event if not already in the list
-        if (!member.participatedEvents.includes(eventDetails)) {
-          member.participatedEvents.push(eventDetails);
-          await member.save();
-        }
-      }
-
-      if (lead) {
-        // If participatedEvents field doesn't exist, create it
-        if (!lead.participatedEvents) {
-          lead.participatedEvents = [];
-        }
-        // Add event if not already in the list
-        if (!lead.participatedEvents.includes(eventDetails)) {
-          lead.participatedEvents.push(eventDetails);
-          await lead.save();
-        }
-      }
+      await updateParticipation(Member);
+      await updateParticipation(Lead);
     }
 
     res.json({ 
@@ -281,6 +264,7 @@ router.post('/mark-participation/:eventId', async (req, res) => {
     res.status(500).json({ error: 'Failed to mark participation status' });
   }
 });
+
 
 // New route to remove user registration
 router.post('/remove-registration/:eventId', async (req, res) => {
