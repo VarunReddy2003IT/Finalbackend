@@ -78,14 +78,13 @@ router.get('/', async (req, res) => {
 
 router.post('/update-profile', async (req, res) => {
     try {
-        const { email, role, imageUrl } = req.body;
-        console.log(imageUrl);
+        const { email, role, imageUrl, name, location } = req.body;
         
-        if (!email || !role || !imageUrl) {
-            console.log('Missing required fields:', { email, role, imageUrl });
+        if (!email || !role) {
+            console.log('Missing required fields:', { email, role });
             return res.status(400).json({
                 success: false,
-                message: 'Email, role, and imageUrl are required'
+                message: 'Email and role are required'
             });
         }
 
@@ -108,9 +107,23 @@ router.post('/update-profile', async (req, res) => {
                 });
         }
 
+        // Create update object with only provided fields
+        const updateFields = {};
+        if (imageUrl) updateFields.imageUrl = imageUrl;
+        if (name) updateFields.name = name;
+        if (location !== undefined) updateFields.location = location;
+
+        // Only proceed if there are fields to update
+        if (Object.keys(updateFields).length === 0) {
+            return res.status(400).json({
+                success: false,
+                message: 'No fields to update'
+            });
+        }
+
         const updatedUser = await Model.findOneAndUpdate(
             { email: email.toLowerCase() },
-            { $set: { imageUrl } },
+            { $set: updateFields },
             { new: true }
         );
 
