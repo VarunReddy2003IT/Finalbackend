@@ -1,30 +1,30 @@
 const mongoose = require('mongoose');
 
 const clubEventSchema = new mongoose.Schema({
-  eventname: { 
-    type: String, 
-    required: true 
+  eventname: {
+    type: String,
+    required: true
   },
-  clubtype: { 
-    type: String, 
+  clubtype: {
+    type: String,
     required: true,
     enum: ['Technical', 'Social', 'Cultural']
   },
-  club: { 
-    type: String, 
-    required: true 
+  club: {
+    type: String,
+    required: true
   },
-  image: { 
-    type: String, 
-    default: '' 
+  image: {
+    type: String,
+    default: ''
   },
-  date: { 
-    type: Date, 
-    required: true 
+  date: {
+    type: Date,
+    required: true
   },
-  description: { 
-    type: String, 
-    required: true 
+  description: {
+    type: String,
+    required: true
   },
   type: {
     type: String,
@@ -34,30 +34,15 @@ const clubEventSchema = new mongoose.Schema({
       return this.date >= today ? 'upcoming' : 'past';
     }
   },
-  paymentRequired: { 
-    type: Boolean, 
-    default: false 
-  },
-  paymentQR: { 
-    type: String,
-    validate: {
-      validator: function() {
-        // Only require paymentQR if the event is upcoming and paymentRequired is true
-        const isUpcoming = new Date(this.date) >= new Date();
-        return !(this.paymentRequired === true && isUpcoming && !this.paymentQR);
-      },
-      message: 'Payment QR code is required when payment is enabled for upcoming events'
-    }
-  },
-  registeredEmails: [{ 
-    type: String 
-  }],
-  participatedEmails: [{ 
+  registeredEmails: [{
     type: String
   }],
-  documentUrl: { 
-    type: String, 
-    default: '' 
+  participatedEmails: [{
+    type: String
+  }],
+  documentUrl: {
+    type: String,
+    default: ''
   }
 }, {
   timestamps: true

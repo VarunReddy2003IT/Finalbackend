@@ -24,18 +24,14 @@ router.post('/add', async (req, res) => {
       club, 
       image, 
       date, 
-      description,
-      paymentRequired,
-      paymentQR 
+      description
     } = req.body;
 
     console.log('Received event data:', {
       eventname, 
       clubtype, 
       club, 
-      date,
-      paymentRequired,
-      paymentQR: paymentQR ? 'QR provided' : 'No QR'
+      date
     });
 
     if (!eventname || !clubtype || !club || !date || !description) {
@@ -51,12 +47,6 @@ router.post('/add', async (req, res) => {
     const today = new Date().toISOString().split('T')[0];
     const type = date >= today ? 'upcoming' : 'past';
 
-    // Validate payment link if payment is required for upcoming events
-    if (paymentRequired === true && type === 'upcoming' && !paymentQR) {
-      console.error('Payment QR validation failed:', { paymentRequired, type, paymentQR });
-      return res.status(400).json({ error: 'Payment QR code is required when payment is enabled for upcoming events' });
-    }
-
     const newEvent = new Event({
       eventname,
       clubtype,
@@ -65,8 +55,6 @@ router.post('/add', async (req, res) => {
       date,
       description,
       type,
-      paymentRequired: paymentRequired || false,
-      paymentQR: paymentRequired ? paymentQR : undefined,
       registeredEmails: [],
       participatedEmails: []
     });
