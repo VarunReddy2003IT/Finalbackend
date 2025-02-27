@@ -13,8 +13,8 @@ const clubEventSchema = new mongoose.Schema({
     return this.paymentRequired && isUpcoming;
   }},
   registeredEmails: [{ type: String }],
-  participatedEmails: [{ type: String }],
-  documentUrl: { type: String, default: '' }  // New field for document URL
+  participatedEmails: [{ type: String, default: [] }], // Track who participated
+  documentUrl: { type: String, default: '' }
 }, {
   timestamps: true 
 });

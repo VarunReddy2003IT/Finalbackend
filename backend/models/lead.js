@@ -6,12 +6,12 @@ const leadSchema = new mongoose.Schema({
   email: { type: String, required: true },
   mobilenumber: { type: String},
   password: { type: String, required: true },
-  club: { type: String, required: true } ,// Changed from 'team' to 'club' to match frontend
+  club: { type: String, required: true },
   imageUrl: { type: String, default: null },
   pendingClubs: { type: [String], default: [] },
   selectedClubs: { type: [String], default: [] },
-  location:{type: String},
-  participatedevents:{typr:[String],default:[]}
+  location: { type: String },
+  participatedevents: { type: [String], default: [] } // Fixed typo: typr -> type
 });
 
 module.exports = mongoose.model('Lead', leadSchema, 'Lead');

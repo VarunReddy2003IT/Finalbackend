@@ -7,12 +7,11 @@ const memberSchema = new mongoose.Schema({
   mobilenumber: { type: String },
   password: { type: String, required: true },
   pendingClubs: { type: [String], default: [] },
-  selectedClubs: { type: [String], default: [] }, // Added field for selected clubs
+  selectedClubs: { type: [String], default: [] },
   createdAt: { type: Date, default: Date.now },
   imageUrl: { type: String, default: null },
-  location:{type: String,default:null},
-  participatedevents:{typr:[String],default:[]}
+  location: { type: String, default: null },
+  participatedevents: { type: [String], default: [] } // Fixed typo: typr -> type
 });
-
 
 module.exports = mongoose.model('Member', memberSchema, 'Member');

@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const Event = require('../models/events');
-const Member = require('../models/member'); // Add this import
+const Member = require('../models/member');
 const Lead = require('../models/lead');
 
 // Fetch all events sorted by date
@@ -172,7 +172,6 @@ router.post('/register/:eventId', async (req, res) => {
   }
 });
 
-
 router.post('/upload-document/:eventId', async (req, res) => {
   try {
     const { eventId } = req.params;
@@ -197,7 +196,7 @@ router.post('/mark-participation/:eventId', async (req, res) => {
   try {
     const { eventId } = req.params;
     const { userEmail, participated, eventDetails } = req.body;
-    console.log(userEmail);
+    console.log('Processing participation request for:', userEmail, 'Participated:', participated);
     
     // Find the event
     const event = await Event.findById(eventId);
@@ -210,33 +209,84 @@ router.post('/mark-participation/:eventId', async (req, res) => {
       return res.status(400).json({ error: 'User not registered for this event' });
     }
 
-    // Update participation status
+    let memberUpdated = false;
+    let leadUpdated = false;
+    let updateResult;
+
     if (participated && eventDetails) {
+      // Update the Event's participatedEmails array if it exists
+      if (event.participatedEmails) {
+        if (!event.participatedEmails.includes(userEmail)) {
+          event.participatedEmails.push(userEmail);
+          await event.save();
+        }
+      }
+
       // Update Member collection
-      await Member.findOneAndUpdate(
+      updateResult = await Member.findOneAndUpdate(
         { email: userEmail },
-        { $addToSet: { participatedEvents: eventDetails } },
+        { $addToSet: { participatedevents: eventDetails } },
         { new: true }
       );
-      
-      // Update Lead collection
-      await Lead.findOneAndUpdate(
+      memberUpdated = !!updateResult;
+      console.log('Member update result:', memberUpdated ? 'Found and updated' : 'Not found');
+
+      // Update Lead collection if the member was not found
+      if (!memberUpdated) {
+        updateResult = await Lead.findOneAndUpdate(
+          { email: userEmail },
+          { $addToSet: { participatedevents: eventDetails } },
+          { new: true }
+        );
+        leadUpdated = !!updateResult;
+        console.log('Lead update result:', leadUpdated ? 'Found and updated' : 'Not found');
+      }
+    } else if (!participated && eventDetails) {
+      // Remove from Event's participatedEmails array if it exists
+      if (event.participatedEmails) {
+        event.participatedEmails = event.participatedEmails.filter(email => email !== userEmail);
+        await event.save();
+      }
+
+      // Remove from Member's participatedevents
+      updateResult = await Member.findOneAndUpdate(
         { email: userEmail },
-        { $addToSet: { participatedEvents: eventDetails } },
+        { $pull: { participatedevents: eventDetails } },
         { new: true }
       );
+      memberUpdated = !!updateResult;
+      console.log('Member remove result:', memberUpdated ? 'Found and updated' : 'Not found');
+
+      // Remove from Lead's participatedevents if member was not found
+      if (!memberUpdated) {
+        updateResult = await Lead.findOneAndUpdate(
+          { email: userEmail },
+          { $pull: { participatedevents: eventDetails } },
+          { new: true }
+        );
+        leadUpdated = !!updateResult;
+        console.log('Lead remove result:', leadUpdated ? 'Found and updated' : 'Not found');
+      }
+    }
+
+    // Check if any document was updated
+    if ((participated && !(memberUpdated || leadUpdated))) {
+      console.warn('No user document was updated. User may not exist in either collection.');
     }
 
     res.json({ 
       message: participated ? 
         'User marked as participated' : 
-        'User marked as not participated' 
+        'User marked as not participated',
+      success: memberUpdated || leadUpdated,
+      userFound: memberUpdated ? 'member' : (leadUpdated ? 'lead' : 'none')
     });
   } catch (error) {
     console.error('Error marking participation:', error);
     res.status(500).json({ error: 'Failed to mark participation status' });
   }
 });
+
 router.get('/registered-profiles/:eventId', async (req, res) => {
   try {
     const { eventId } = req.params;
@@ -249,11 +299,11 @@ router.get('/registered-profiles/:eventId', async (req, res) => {
     // Fetch profiles from both Member and Lead collections
     const memberProfiles = await Member.find({ 
       email: { $in: event.registeredEmails }
-    }).select('name email collegeId mobilenumber imageUrl participatedEvents');
+    }).select('name email collegeId mobilenumber imageUrl participatedevents');
 
     const leadProfiles = await Lead.find({ 
       email: { $in: event.registeredEmails }
-    }).select('name email collegeId mobilenumber imageUrl participatedEvents');
+    }).select('name email collegeId mobilenumber imageUrl participatedevents');
 
     // Combine and remove duplicates based on email
     const allProfiles = [...memberProfiles, ...leadProfiles];
@@ -261,14 +311,19 @@ router.get('/registered-profiles/:eventId', async (req, res) => {
       new Map(allProfiles.map(profile => [profile.email, profile])).values()
     );
 
-    // Add participation status based on participatedEvents array
+    // Add participation status based on participatedevents array
     const eventIdentifier = `${event.eventname}-${event.club}`;
     const profilesWithStatus = uniqueProfiles.map(profile => {
-      const hasParticipated = profile.participatedEvents && 
-                             profile.participatedEvents.includes(eventIdentifier);
+      const hasParticipated = profile.participatedevents && 
+                             profile.participatedevents.includes(eventIdentifier);
+      
+      // Also check if in event's participatedEmails array as a fallback
+      const inParticipatedList = event.participatedEmails && 
+                               event.participatedEmails.includes(profile.email);
+                               
       return {
         ...profile.toObject(),
-        participationStatus: hasParticipated ? 'participated' : undefined
+        participationStatus: (hasParticipated || inParticipatedList) ? 'participated' : undefined
       };
     });
 
@@ -278,7 +333,6 @@ router.get('/registered-profiles/:eventId', async (req, res) => {
     res.status(500).json({ error: 'Failed to fetch registered profiles' });
   }
 });
-
 
 // New route to remove user registration
 router.post('/remove-registration/:eventId', async (req, res) => {
@@ -294,6 +348,12 @@ router.post('/remove-registration/:eventId', async (req, res) => {
 
     // Remove email from registeredEmails array
     event.registeredEmails = event.registeredEmails.filter(email => email !== userEmail);
+    
+    // Also remove from participatedEmails if present
+    if (event.participatedEmails) {
+      event.participatedEmails = event.participatedEmails.filter(email => email !== userEmail);
+    }
+    
     await event.save();
 
     res.json({ message: 'Registration removed successfully' });
@@ -302,4 +362,5 @@ router.post('/remove-registration/:eventId', async (req, res) => {
     res.status(500).json({ error: 'Failed to remove registration' });
   }
 });
+
 module.exports = router;
