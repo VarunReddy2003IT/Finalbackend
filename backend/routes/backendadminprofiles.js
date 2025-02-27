@@ -23,7 +23,7 @@ const transporter = nodemailer.createTransport({
     }
   
     try {
-      const member = await Member.findOneAndRemove({ email });
+      const member = await Member.findOneAndDelete({ email });
   
       if (!member) {
         return res.status(404).json({
@@ -71,7 +71,7 @@ const transporter = nodemailer.createTransport({
     }
   
     try {
-      const lead = await Lead.findOneAndRemove({ email });
+      const lead = await Lead.findOneAndDelete({ email });
   
       if (!lead) {
         return res.status(404).json({
