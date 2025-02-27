@@ -14,6 +14,9 @@ const clubSchema = new mongoose.Schema({
   logo: {
     type: String
   },
+  description: {
+    type: String
+  },
   labels: [{
     name: String,
     value: String

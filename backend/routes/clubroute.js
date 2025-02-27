@@ -5,7 +5,7 @@ const router = express.Router();
 // Create initial club data
 router.post('/init', async (req, res) => {
   try {
-    const { name, type } = req.body;
+    const { name, type, description } = req.body;
     
     // Check if club already exists
     const existingClub = await Club.findOne({ name });
@@ -17,6 +17,7 @@ router.post('/init', async (req, res) => {
     const newClub = new Club({
       name,
       type,
+      description: description || '',
       labels: []
     });
     
@@ -52,7 +53,7 @@ router.get('/:clubName', async (req, res) => {
 // Update club information
 router.post('/update', async (req, res) => {
   try {
-    const { clubName, logo, labels } = req.body;
+    const { clubName, logo, labels, description } = req.body;
     
     // Find the club
     let club = await Club.findOne({ name: clubName });
@@ -63,12 +64,17 @@ router.post('/update', async (req, res) => {
         name: clubName,
         type: 'Cultural', // Default type, can be changed as needed
         logo: logo || '',
+        description: description || '',
         labels: labels || []
       });
     } else {
       // Update existing club
       if (logo !== undefined) {
         club.logo = logo;
+      }
+      
+      if (description !== undefined) {
+        club.description = description;
       }
       
       if (labels !== undefined) {
