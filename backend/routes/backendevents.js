@@ -4,6 +4,38 @@ const Event = require('../models/events');
 const Member = require('../models/member');
 const Lead = require('../models/lead');
 
+router.patch('/update/:eventId', async (req, res) => {
+  try {
+    const { eventId } = req.params;
+    const { date } = req.body; // Destructuring date from request body
+
+    // Validate input
+    if (!date) {
+      return res.status(400).json({ error: 'Date is required' });
+    }
+
+    // Find the event
+    const event = await Event.findById(eventId);
+    if (!event) {
+      return res.status(404).json({ error: 'Event not found' });
+    }
+
+    // Update the event's date
+    event.date = date;
+
+    // Determine the event type based on the updated date
+    const today = new Date().toISOString().split('T')[0];
+    event.type = date >= today ? 'upcoming' : 'past';
+
+    // Save the updated event
+    await event.save();
+
+    res.json({ message: 'Event date updated successfully', event });
+  } catch (error) {
+    console.error('Error updating event date:', error);
+    res.status(500).json({ error: 'Failed to update event date' });
+  }
+});
 // Fetch all events sorted by date
 router.get('/', async (req, res) => {
   try {
