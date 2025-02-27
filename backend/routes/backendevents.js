@@ -26,8 +26,17 @@ router.post('/add', async (req, res) => {
       date, 
       description,
       paymentRequired,
-      paymentLink 
+      paymentQR 
     } = req.body;
+
+    console.log('Received event data:', {
+      eventname, 
+      clubtype, 
+      club, 
+      date,
+      paymentRequired,
+      paymentQR: paymentQR ? 'QR provided' : 'No QR'
+    });
 
     if (!eventname || !clubtype || !club || !date || !description) {
       return res.status(400).json({ error: 'Missing required fields' });
@@ -43,8 +52,9 @@ router.post('/add', async (req, res) => {
     const type = date >= today ? 'upcoming' : 'past';
 
     // Validate payment link if payment is required for upcoming events
-    if (paymentRequired && type === 'upcoming' && !paymentLink) {
-      return res.status(400).json({ error: 'Payment link is required when payment is enabled' });
+    if (paymentRequired === true && type === 'upcoming' && !paymentQR) {
+      console.error('Payment QR validation failed:', { paymentRequired, type, paymentQR });
+      return res.status(400).json({ error: 'Payment QR code is required when payment is enabled for upcoming events' });
     }
 
     const newEvent = new Event({
@@ -56,13 +66,18 @@ router.post('/add', async (req, res) => {
       description,
       type,
       paymentRequired: paymentRequired || false,
-      paymentLink: paymentRequired ? paymentLink : undefined
+      paymentQR: paymentRequired ? paymentQR : undefined,
+      registeredEmails: [],
+      participatedEmails: []
     });
 
     const savedEvent = await newEvent.save();
     res.status(201).json(savedEvent);
   } catch (error) {
     console.error('Error creating event:', error);
+    if (error.name === 'ValidationError') {
+      return res.status(400).json({ error: error.message });
+    }
     res.status(500).json({ error: 'Failed to create event' });
   }
 });
