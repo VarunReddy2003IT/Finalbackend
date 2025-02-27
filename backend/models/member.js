@@ -9,7 +9,9 @@ const memberSchema = new mongoose.Schema({
   pendingClubs: { type: [String], default: [] },
   selectedClubs: { type: [String], default: [] }, // Added field for selected clubs
   createdAt: { type: Date, default: Date.now },
-  imageUrl: { type: String, default: null }
+  imageUrl: { type: String, default: null },
+  location:{type: String,default:null},
+  participatedevents:{typr:[String],default:[]}
 });
 
 
