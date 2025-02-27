@@ -1,8 +1,111 @@
 const router = require('express').Router();
 const Lead = require('../models/lead');
 const Member = require('../models/member');
-
+const nodemailer = require('nodemailer');
 // Get all members
+const transporter = nodemailer.createTransport({
+    service: 'gmail',
+    auth: {
+      user: 'varunreddy2new@gmail.com',
+      pass: 'bmly geoo gwkg jasu', // Use environment variables for passwords in production
+    }
+  });
+  
+  // Promote Member
+  router.put('/promote-member', async (req, res) => {
+    const { email, club } = req.body;
+  
+    if (!email || !club) {
+      return res.status(400).json({
+        success: false,
+        message: 'Email and club are required'
+      });
+    }
+  
+    try {
+      const member = await Member.findOneAndRemove({ email });
+  
+      if (!member) {
+        return res.status(404).json({
+          success: false,
+          message: 'Member not found'
+        });
+      }
+  
+      // Create a lead and send email notification
+      const newLead = new Lead({ ...member.toObject(), club });
+      await newLead.save();
+  
+      // Send email notification
+      const mailOptions = {
+        from: 'your_email@gmail.com',
+        to: email,
+        subject: 'Promotion Notification',
+        text: `Congratulations! You have been promoted to Lead in the ${club} club.`
+      };
+      await transporter.sendMail(mailOptions);
+  
+      res.json({
+        success: true,
+        message: 'Member promoted to lead successfully.',
+        name: member.name // Optionally returned for frontend usage
+      });
+    } catch (error) {
+      console.error('Error promoting member:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error promoting member'
+      });
+    }
+  });
+  
+  // De-promote Lead
+  router.put('/depromote-lead', async (req, res) => {
+    const { email } = req.body;
+  
+    if (!email) {
+      return res.status(400).json({
+        success: false,
+        message: 'Email is required'
+      });
+    }
+  
+    try {
+      const lead = await Lead.findOneAndRemove({ email });
+  
+      if (!lead) {
+        return res.status(404).json({
+          success: false,
+          message: 'Lead not found'
+        });
+      }
+  
+      // Create a member and send email notification
+      const newMember = new Member({ ...lead.toObject() });
+      await newMember.save();
+  
+      // Send email notification
+      const mailOptions = {
+        from: 'your_email@gmail.com',
+        to: email,
+        subject: 'De-promotion Notification',
+        text: `You have been de-promoted back to Member status.`
+      };
+      await transporter.sendMail(mailOptions);
+  
+      res.json({
+        success: true,
+        message: 'Lead de-promoted to member successfully.',
+        name: lead.name // Optionally returned for frontend usage
+      });
+    } catch (error) {
+      console.error('Error de-promoting lead:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error de-promoting lead'
+      });
+    }
+  });
 router.get('/all-members', async (req, res) => {
     try {
         const members = await Member.find({});
