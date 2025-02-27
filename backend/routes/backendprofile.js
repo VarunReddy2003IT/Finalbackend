@@ -50,7 +50,7 @@ router.get('/', async (req, res) => {
 
         const userData = await Model.findOne(
             { email: email.toLowerCase() },
-            { name: 1, email: 1, imageUrl: 1, club: 1, _id: 0 }
+            { name: 1, email: 1, imageUrl: 1, club: 1, _id: 0,location:1 }
         );
 
         if (!userData) {
