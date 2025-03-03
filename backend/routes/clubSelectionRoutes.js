@@ -9,8 +9,8 @@ const crypto = require('crypto');
 const transporter = nodemailer.createTransport({
   service: 'gmail',
   auth: {
-    user: 'varunreddy2new@gmail.com',
-    pass: 'bmly geoo gwkg jasu'
+    user: 'gvpclubconnect@gmail.com',
+    pass: 'dajl xekp dkda glda'
   }
 });
 
@@ -142,7 +142,7 @@ router.post('/select-clubs', async (req, res) => {
     if (leadEmails.length > 0) {
       try {
         await transporter.sendMail({
-          from: 'varunreddy2new@gmail.com',
+          from: 'gvpclubconnect@gmail.com',
           to: leadEmails,
           subject: `New ${role} Request for ${selectedClub}`,
           html: `
@@ -253,7 +253,7 @@ router.get('/approve/:token/:approved', async (req, res) => {
       // Send approval email
       try {
         await transporter.sendMail({
-          from: 'varunreddy2new@gmail.com',
+          from: 'gvpclubconnect@gmail.com',
           to: email,
           subject: `${club} Club Request Approved!`,
           html: `
@@ -276,7 +276,7 @@ router.get('/approve/:token/:approved', async (req, res) => {
       // Send rejection email
       try {
         await transporter.sendMail({
-          from: 'varunreddy2new@gmail.com',
+          from: 'gvpclubconnect@gmail.com',
           to: email,
           subject: `Update on ${club} Club Request`,
           html: `

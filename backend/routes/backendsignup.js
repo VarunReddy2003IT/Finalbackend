@@ -12,8 +12,8 @@ const router = express.Router();
 const transporter = nodemailer.createTransport({
   service: 'gmail',
   auth: {
-    user: 'varunreddy2new@gmail.com',
-    pass: 'bmly geoo gwkg jasu',
+    user: 'gvpclubconnect@gmail.com',
+    pass: 'dajl xekp dkda glda',
   },
 });
 
@@ -89,7 +89,7 @@ router.post('/send-otp', async (req, res) => {
 
     // Send OTP email
     const mailOptions = {
-      from: 'varunreddy2new@gmail.com',
+      from: 'gvpclubconnect@gmail.com',
       to: email,
       subject: 'GVPCE Club Connect - Email Verification OTP',
       html: `
@@ -203,7 +203,7 @@ router.post('/verify', async (req, res) => {
 
       // Send email to admins
       await transporter.sendMail({
-        from: 'varunreddy2new@gmail.com',
+        from: 'gvpclubconnect@gmail.com',
         to: adminEmails,
         subject: `GVPCE Club Connect Signup Request for ${role}`,
         html: `<div><h2>New Signup Request</h2><p><strong>Name:</strong> ${name}</p><p><strong>Email:</strong> ${email}</p><p><strong>Mobile:</strong> ${mobilenumber}</p><p><strong>Role:</strong> ${role}</p>${role === 'lead' ? `<p><strong>Club:</strong> ${club}</p>` : ''}<p><strong>College ID:</strong> ${collegeId}</p><div><a href="https://finalbackend-8.onrender.com/api/signup/approve/${newRequest._id}">Approve</a><a href="https://finalbackend-8.onrender.com/api/signup/reject/${newRequest._id}">Reject</a></div></div>`
@@ -225,7 +225,7 @@ router.post('/verify', async (req, res) => {
 
     // Send welcome email
     await transporter.sendMail({
-      from: 'varunreddy2new@gmail.com',
+      from: 'gvpclubconnect@gmail.com',
       to: email,
       subject: 'Welcome to GVPCE Club Connect!',
       html: `<div><h2>Welcome to GVPCE Club Connect!</h2><p>Dear ${name},</p><p>Your account has been successfully created.</p></div>`
@@ -276,7 +276,7 @@ router.get('/approve/:id', async (req, res) => {
 
     // Send approval email
     const approvalEmail = {
-      from: 'varunreddy2new@gmail.com',
+      from: 'gvpclubconnect@gmail.com',
       to: signupRequest.email,
       subject: 'GVPCE Club Connect - Account Approved!',
       html: `
@@ -313,7 +313,7 @@ router.get('/reject/:id', async (req, res) => {
 
     // Send rejection email
     const rejectionEmail = {
-      from: 'varunreddy2new@gmail.com',
+      from: 'gvpclubconnect@gmail.com',
       to: signupRequest.email,
       subject: 'GVPCE Club Connect - Account Request Status',
       html: `
@@ -410,7 +410,7 @@ router.post('/resend-otp', async (req, res) => {
 
     // Send new OTP email
     const mailOptions = {
-      from: 'varunreddy2new@gmail.com',
+      from: 'gvpclubconnect@gmail.com',
       to: email,
       subject: 'GVPCE Club Connect - New Email Verification OTP',
       html: `
